@@ -14,9 +14,10 @@ module Bosh::Director
     it_behaves_like 'an instance group'
 
     subject do
-      InstanceGroupConfig.new(instance_group, stemcells)
+      InstanceGroupConfig.new(instance_group, stemcells, deployment_config)
     end
 
+    let(:deployment_config) { double(DeploymentConfig, serial: true) }
     let(:instance_group) do
       {
         'lifecycle' => 'errand',
@@ -62,6 +63,31 @@ module Bosh::Director
       it 'returns the instance group name' do
         expect(subject.name).to eq('test_instance_group')
       end
+    end
+
+    describe :serial do
+      context 'when serial is unset' do
+        it 'returns the default value: true' do
+          expect(subject.serial).to eq(true)
+        end
+      end
+
+      context 'when serial is set to false in instance_group' do
+        before do
+          instance_group['update'] = { 'serial' => false }
+        end
+        it 'returns false' do
+          expect(subject.serial).to eq(false)
+        end
+      end
+
+      context 'when serial is set to false in deployment_config' do
+        let(:deployment_config) { double(DeploymentConfig, serial: false) }
+        it 'returns false' do
+          expect(subject.serial).to eq(false)
+        end
+      end
+
     end
 
     describe :has_availability_zone? do

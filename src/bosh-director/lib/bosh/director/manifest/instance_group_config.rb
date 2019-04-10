@@ -2,9 +2,10 @@ module Bosh::Director
   class InstanceGroupConfig
     include ValidationHelper
 
-    def initialize(hash, stemcells)
+    def initialize(hash, stemcells, deployment_config)
       @hash = hash
       @stemcells = stemcells
+      @deployment_config = deployment_config
     end
 
     def lifecycle
@@ -24,6 +25,12 @@ module Bosh::Director
         class: String,
         optional: false,
       )
+    end
+
+    def serial
+      return @hash['update']['serial'] if @hash.key?('update') && @hash['update'].key?('serial')
+
+      @deployment_config.serial
     end
 
     def has_availability_zone?(availability_zone)

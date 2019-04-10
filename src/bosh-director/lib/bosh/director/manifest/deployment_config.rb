@@ -10,6 +10,12 @@ module Bosh::Director
       @manifest_hash["name"] || ""
     end
 
+    def serial
+      return @manifest_hash['update']['serial'] if @manifest_hash.key?('update') && @manifest_hash['update'].key?('serial')
+
+      true
+    end
+
     def team_names
       @team_names
     end
@@ -32,7 +38,7 @@ module Bosh::Director
       return [] if !@manifest_hash.key?('instance_groups') || !@manifest_hash['instance_groups']
 
       @manifest_hash['instance_groups'].map do |instance_group|
-        Bosh::Director::InstanceGroupConfig.new(instance_group, @manifest_hash['stemcells'])
+        Bosh::Director::InstanceGroupConfig.new(instance_group, @manifest_hash['stemcells'], self)
       end
     end
   end
