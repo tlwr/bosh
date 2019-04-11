@@ -11,9 +11,13 @@ module Bosh::Director
     end
 
     def serial
-      return @manifest_hash['update']['serial'] if @manifest_hash.key?('update') && @manifest_hash['update'].key?('serial')
+      return @manifest_hash.dig('update', 'serial') unless @manifest_hash.dig('update', 'serial').nil?
 
       true
+    end
+
+    def max_in_flight
+      @manifest_hash['update']['max_in_flight']
     end
 
     def team_names

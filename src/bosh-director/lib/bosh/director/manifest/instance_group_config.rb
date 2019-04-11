@@ -28,9 +28,13 @@ module Bosh::Director
     end
 
     def serial
-      return @hash['update']['serial'] if @hash.key?('update') && @hash['update'].key?('serial')
+      return @hash.dig('update', 'serial') unless @hash.dig('update', 'serial').nil?
 
       @deployment_config.serial
+    end
+
+    def max_in_flight
+      @hash.dig('update', 'max_in_flight') || @deployment_config.max_in_flight
     end
 
     def has_availability_zone?(availability_zone)

@@ -28,6 +28,7 @@ module Bosh::Director
           ],
         },
         'update' => {
+          'max_in_flight' => 5,
         },
         'stemcells' => [
           {
@@ -57,6 +58,12 @@ module Bosh::Director
         it 'returns false when set to false' do
           expect(subject.serial).to eq(false)
         end
+      end
+    end
+
+    describe :max_in_flight do
+      it 'returns the set value' do
+        expect(subject.max_in_flight).to eq(5)
       end
     end
   end

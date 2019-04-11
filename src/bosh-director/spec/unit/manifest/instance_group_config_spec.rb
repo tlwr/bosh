@@ -17,7 +17,7 @@ module Bosh::Director
       InstanceGroupConfig.new(instance_group, stemcells, deployment_config)
     end
 
-    let(:deployment_config) { double(DeploymentConfig, serial: true) }
+    let(:deployment_config) { double(DeploymentConfig, serial: true, max_in_flight: 3) }
     let(:instance_group) do
       {
         'lifecycle' => 'errand',
@@ -88,6 +88,23 @@ module Bosh::Director
         end
       end
 
+    end
+
+    describe :max_in_flight do
+      context 'when max_in_flight is unset' do
+        it 'returns the max_in_flight value of the deployment' do
+          expect(subject.max_in_flight).to eq(3)
+        end
+      end
+
+      context 'when max_in_flight is set to 3 in instance_group' do
+        before do
+          instance_group['update'] = { 'max_in_flight' => 5 }
+        end
+        it 'returns 5' do
+          expect(subject.max_in_flight).to eq(5)
+        end
+      end
     end
 
     describe :has_availability_zone? do
