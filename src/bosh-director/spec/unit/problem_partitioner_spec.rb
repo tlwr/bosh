@@ -3,7 +3,7 @@ require 'spec_helper'
 module Bosh::Director
   describe ProblemPartitioner do
     let(:subject) do
-      described_class.new
+      described_class
     end
     let(:deployment) {Models::Deployment.make(name: 'mydeployment', manifest: YAML.dump(manifest))}
     let(:instances) do

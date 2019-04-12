@@ -30,14 +30,10 @@ module Bosh::Director
       problems = Models::DeploymentProblem.where(id: resolutions.keys)
 
       begin_stage('Applying problem resolutions', problems.count)
-
       if Config.parallel_problem_resolution
-        ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
-          problems.each do |problem|
-            pool.process do
-              process_problem(problem)
-            end
-          end
+        all_partitioned_problems = ProblemPartitioner.partition(@deployment, problems)
+        all_partitioned_problems.each do |partitioned_problems|
+          process_problem_partitions(partitioned_problems)
         end
       else
         problems.each do |problem|
@@ -51,6 +47,26 @@ module Bosh::Director
     end
 
     private
+
+    def process_problem_partitions(partitioned_problems)
+      ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
+        partitioned_problems.each do |partitioned_problem|
+          pool.process do
+            process_problem_partition(partitioned_problem)
+          end
+        end
+      end
+    end
+
+    def process_problem_partition(partitioned_problem)
+      ThreadPool.new(max_threads: partitioned_problem.max_in_flight).wrap do |problem_pool|
+        partitioned_problem.problems.each do |problem|
+          problem_pool.process do
+            process_problem(problem)
+          end
+        end
+      end
+    end
 
     def process_problem(problem)
       if problem.state != 'open'

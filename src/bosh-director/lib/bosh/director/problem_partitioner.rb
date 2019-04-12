@@ -22,14 +22,14 @@ module Bosh::Director
   end
 
   class ProblemPartitioner
-    def partition(deployment, problems)
+    def self.partition(deployment, problems)
       problem_partitions = problem_partitions_by_instance_group(deployment, problems)
       partition_problems_by_serial(problem_partitions)
     end
 
     private
 
-    def problem_partitions_by_instance_group(deployment, problems)
+    def self.problem_partitions_by_instance_group(deployment, problems)
       deployment_config = DeploymentConfig.new(YAML.safe_load(deployment.manifest), nil)
       deployment_config.instance_groups.map do |instance_group|
         ProblemPartition.new(
@@ -41,7 +41,7 @@ module Bosh::Director
       end
     end
 
-    def partition_problems_by_serial(partitioned_problems)
+    def self.partition_problems_by_serial(partitioned_problems)
       result = []
       parallel_problems = []
       partitioned_problems.each do |partitioned_problem|
@@ -57,7 +57,7 @@ module Bosh::Director
       result
     end
 
-    def get_instance_group_name(instance_id)
+    def self.get_instance_group_name(instance_id)
       instance = Models::Instance.where(id: instance_id).first
       instance.job
     end
