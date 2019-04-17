@@ -46,6 +46,7 @@ module Bosh::Director
         manifest['instance_groups'][4]['update'] = { 'serial' => false, 'max_in_flight' => 4 }
         manifest['instance_groups'][5]['update'] = { 'serial' => false, 'max_in_flight' => 5 }
       end
+
       it 'partitions by serial and skips instance_groups without problems' do
         expected_problems_order = [
           [ProblemPartition.new(problems[0..1], 'instance_group_0', true, 1)],

@@ -27,7 +27,7 @@ module Bosh::Director
 
     def apply_resolutions(resolutions)
       @resolutions = resolutions
-      problems = Models::DeploymentProblem.where(id: resolutions.keys)
+      problems = Models::DeploymentProblem.where(id: resolutions.keys.map(&:to_i)).all
 
       begin_stage('Applying problem resolutions', problems.count)
       if Config.parallel_problem_resolution
