@@ -258,4 +258,34 @@ describe 'vip networks', type: :integration do
       expect(new_instance_with_second_vip.ips).to eq(['192.168.1.3', '68.68.68.68'])
     end
   end
+
+  context 'having static_ips on cloud config' do
+    it 'should complain with an useless error' do
+      cc = Bosh::Spec::NewDeployments.simple_cloud_config
+      cc['compilation'] = {
+        'cloud_properties' => {},
+        'network' => 'vip-network',
+        'workers' => 1,
+      }
+      cc['networks'] = [
+        {
+          'name' => 'vip-network',
+          'type' => 'vip',
+          'subnets' => [
+            { 'static_ips' => %w[66.66.66.66 67.67.67.67 68.68.68.68 69.69.69.69] }
+          ],
+        }
+      ]
+
+      upload_cloud_config(cloud_config_hash: cc)
+
+      manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
+      manifest_hash['instance_groups'].first['instances'] = 1
+      manifest_hash['instance_groups'].first['networks'] = cc['networks']
+      manifest_hash['instance_groups'].first['networks'].first['default'] = %w[dns gateway]
+      output = deploy_simple_manifest(manifest_hash: manifest_hash)
+
+      expect(output).to include('Error: Required property')
+    end
+  end
 end
