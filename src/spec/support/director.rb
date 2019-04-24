@@ -182,6 +182,7 @@ module Bosh::Spec
           description: 'scan and fix',
           state: 'processing'
         )
+        @logger.info(task(resurrection_task.last)) if resurrection_task.any?
         return unless resurrection_task.any?
 
         @logger.debug("Waiting for resurrection to finish, found resurrection tasks: #{resurrection_task.all}")

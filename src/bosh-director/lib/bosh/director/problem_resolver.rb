@@ -31,9 +31,9 @@ module Bosh::Director
 
       begin_stage('Applying problem resolutions', problems.count)
       if Config.parallel_problem_resolution
-        all_partitioned_problems = ProblemPartitioner.partition(@deployment, problems)
-        all_partitioned_problems.each do |partitioned_problems|
-          process_problem_partitions(partitioned_problems)
+        all_problem_partitions = ProblemPartitioner.partition(@deployment, problems)
+        all_problem_partitions.each do |problem_partitions|
+          process_problem_partitions(problem_partitions)
         end
       else
         problems.each do |problem|
@@ -42,25 +42,28 @@ module Bosh::Director
       end
 
       error_message = @resolution_error_logs.string.empty? ? nil : @resolution_error_logs.string.chomp
-
       [@resolved_count, error_message]
     end
 
     private
 
-    def process_problem_partitions(partitioned_problems)
-      ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
-        partitioned_problems.each do |partitioned_problem|
-          pool.process do
-            process_problem_partition(partitioned_problem)
+    def process_problem_partitions(problem_partitions)
+      #if problem_partitions.length > 1
+        ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
+          problem_partitions.each do |problem_partition|
+            pool.process do
+              process_problem_partition(problem_partition)
+            end
           end
         end
-      end
+      #else
+      #  process_problem_partition(problem_partitions.first) unless problem_partitions.empty?
+      #end
     end
 
-    def process_problem_partition(partitioned_problem)
-      ThreadPool.new(max_threads: partitioned_problem.max_in_flight).wrap do |problem_pool|
-        partitioned_problem.problems.each do |problem|
+    def process_problem_partition(problem_partition)
+      ThreadPool.new(max_threads: problem_partition.max_in_flight).wrap do |problem_pool|
+        problem_partition.problems.each do |problem|
           problem_pool.process do
             process_problem(problem)
           end

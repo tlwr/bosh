@@ -1,6 +1,5 @@
 module Bosh::Director
   class ProblemPartition
-
     attr_reader :instance_group_name
     attr_reader :problems
     attr_reader :serial
@@ -22,44 +21,48 @@ module Bosh::Director
   end
 
   class ProblemPartitioner
-    def self.partition(deployment, problems)
-      problem_partitions = problem_partitions_by_instance_group(deployment, problems)
-      partition_problems_by_serial(problem_partitions)
-    end
-
-    private
-
-    def self.problem_partitions_by_instance_group(deployment, problems)
-      deployment_config = DeploymentConfig.new(YAML.safe_load(deployment.manifest), nil)
-      deployment_config.instance_groups.map do |instance_group|
-        ProblemPartition.new(
-          problems.select { |problem| get_instance_group_name(problem.resource_id) == instance_group.name },
-          instance_group.name,
-          instance_group.serial,
-          instance_group.max_in_flight,
-        )
+    class << self
+      def partition(deployment, problems)
+        problem_partitions_by_ig = problem_partitions_by_instance_group(deployment, problems)
+        partition_problems_by_serial(problem_partitions_by_ig)
       end
-    end
 
-    def self.partition_problems_by_serial(partitioned_problems)
-      result = []
-      parallel_problems = []
-      partitioned_problems.each do |partitioned_problem|
-        if partitioned_problem.serial
-          result << parallel_problems unless parallel_problems.empty?
-          parallel_problems = []
-          result << [partitioned_problem]
-        else
-          parallel_problems << partitioned_problem
+      private
+
+      def problem_partitions_by_instance_group(deployment, problems)
+        deployment_config = DeploymentConfig.new(YAML.safe_load(deployment.manifest), nil)
+        deployment_config.instance_groups.map do |instance_group|
+          problems_for_ig = problems.select { |problem| get_instance_group_name(problem.resource_id) == instance_group.name }
+          next if problems_for_ig.empty?
+          ProblemPartition.new(
+            problems_for_ig,
+            instance_group.name,
+            instance_group.serial,
+            instance_group.max_in_flight,
+          )
+        end.compact!
+      end
+
+      def partition_problems_by_serial(problem_partitions_by_ig)
+        result = []
+        parallel_problem_partitions = []
+        problem_partitions_by_ig.each do |problem_partition|
+          if problem_partition.serial
+            result << parallel_problem_partitions unless parallel_problem_partitions.empty?
+            result << [problem_partition]
+
+            parallel_problem_partitions = []
+          else
+            parallel_problem_partitions << problem_partition
+          end
         end
+        result << parallel_problem_partitions unless parallel_problem_partitions.empty?
+        result
       end
-      result << parallel_problems unless parallel_problems.empty?
-      result
-    end
 
-    def self.get_instance_group_name(instance_id)
-      instance = Models::Instance.where(id: instance_id).first
-      instance.job
+      def get_instance_group_name(instance_id)
+        Models::Instance.where(id: instance_id).first.job
+      end
     end
   end
 end

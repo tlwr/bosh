@@ -94,4 +94,32 @@ describe 'resurrector', type: :integration, hm: true do
     disabled_instance.kill_agent
     expect(director.wait_for_vm('foobar', '0', 150, deployment_name: 'simple_disabled')).to be_nil
   end
+
+  fit 'resurrects vms in serial and parallel' do
+    deployment_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
+    deployment_hash['instance_groups'][0]['instances'] = 2
+    job2_opts = {
+        name: 'foobar_2',
+        jobs: [{ 'name' => 'foobar', 'release' => 'bosh-release' }],
+        instances: 3,
+        update: { 'serial' => false, 'max_in_flight' => 3 },
+    }
+    deployment_hash['instance_groups'][1] = Bosh::Spec::NewDeployments.simple_instance_group(job2_opts)
+    job3_opts = {
+        name: 'foobar_3',
+        jobs: [{ 'name' => 'foobar', 'release' => 'bosh-release' }],
+        instances: 2,
+        update: { 'serial' => true, 'max_in_flight' => 2 },
+    }
+    deployment_hash['instance_groups'][2] = Bosh::Spec::NewDeployments.simple_instance_group(job3_opts)
+    deployment_hash_simple = deployment_hash.merge('name' => 'simple')
+
+    bosh_runner.run("upload-release #{spec_asset('dummy2-release.tgz')}")
+    upload_cloud_config(cloud_config_hash: Bosh::Spec::NewDeployments.simple_cloud_config)
+
+    deploy_simple_manifest(manifest_hash: deployment_hash_simple)
+    orig_instance = director.instance('foobar', '0', deployment_name: 'simple')
+    resurrected_instance = director.kill_vm_and_wait_for_resurrection(orig_instance, deployment_name: 'simple')
+    expect(resurrected_instance.vm_cid).to_not eq(orig_instance.vm_cid)
+  end
 end
