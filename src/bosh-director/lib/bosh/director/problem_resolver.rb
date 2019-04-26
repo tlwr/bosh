@@ -49,6 +49,7 @@ module Bosh::Director
 
     def process_problem_partitions(problem_partitions)
       if problem_partitions.length > 1
+        #TODO: use min(max_threads, problem_partitions.size)
         ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
           problem_partitions.each do |problem_partition|
             pool.process do
@@ -63,6 +64,7 @@ module Bosh::Director
 
     def process_problem_partition(problem_partition)
       if problem_partition.problems.length > 1
+        #TODO: use min(max_in_flight, problem_partition.size)
         ThreadPool.new(max_threads: problem_partition.max_in_flight).wrap do |problem_pool|
           problem_partition.problems.each do |problem|
             problem_pool.process do

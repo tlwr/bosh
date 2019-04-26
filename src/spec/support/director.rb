@@ -143,6 +143,10 @@ module Bosh::Spec
       return output, !failed
     end
 
+    def tasks
+      @db[:tasks]
+    end
+
     def raw_task_events(task_id)
       result = @runner.run("task #{task_id} --raw")
       event_list = []
@@ -184,7 +188,7 @@ module Bosh::Spec
         resurrection_task = @db[:tasks].filter(
           username: 'hm',
           description: 'scan and fix',
-          state: 'processing'
+          state: 'processing',
         )
         @logger.info(task(resurrection_task.last)) if resurrection_task.any?
         return unless resurrection_task.any?

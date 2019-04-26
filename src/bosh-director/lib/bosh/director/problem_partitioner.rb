@@ -1,4 +1,5 @@
 module Bosh::Director
+  #TODO rename to InstanceGroupProblems
   class ProblemPartition
     attr_reader :instance_group_name
     attr_reader :problems
@@ -41,7 +42,7 @@ module Bosh::Director
             instance_group.serial,
             instance_group.max_in_flight,
           )
-        end.compact!
+        end.compact
       end
 
       def partition_problems_by_serial(problem_partitions_by_ig)
