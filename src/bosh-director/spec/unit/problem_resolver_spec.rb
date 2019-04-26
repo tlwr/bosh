@@ -9,6 +9,7 @@ module Bosh::Director
     let(:task) { Bosh::Director::Models::Task.make(id: 42, username: 'user') }
     let(:task_writer) { Bosh::Director::TaskDBWriter.new(:event_output, task.id) }
     let(:event_log) { Bosh::Director::EventLog::Log.new(task_writer) }
+
     before(:each) do
       @deployment = Models::Deployment.make(name: 'mycloud')
       @other_deployment = Models::Deployment.make(name: 'othercloud')
@@ -61,8 +62,8 @@ module Bosh::Director
           ProblemPartition.new(partition_problems[2..3], 'instance_group_1', false, 3),
           ProblemPartition.new(partition_problems[4..5], 'instance_group_2', false, 4),
         ],
-        [ProblemPartition.new(partition_problems[6..6], 'instance_group_3', true, 2)],
-        [ProblemPartition.new(partition_problems[7..8], 'instance_group_4', true, 1)],
+        [ProblemPartition.new(partition_problems[6..6], 'instance_group_3', true, 3)],
+        [ProblemPartition.new(partition_problems[7..8], 'instance_group_4', true, 5)],
       ]
       end
       context 'when execution succeeds' do
@@ -72,62 +73,45 @@ module Bosh::Director
 
         context 'when parallel resurrection is turned on' do
           it 'resolves the problems in serial' do
-            allow(ProblemPartitioner).to receive(:partition).and_return(problem_partitions)
+            current_problem_partitions = problem_partitions
+            allow(ProblemPartitioner).to receive(:partition).and_return(current_problem_partitions)
 
             sequel_dataset = instance_double('Sequel::Dataset')
             allow(Models::DeploymentProblem).to receive(:where).and_return(sequel_dataset)
-            allow(sequel_dataset).to receive(:all).and_return(partition_problems[0..8])
 
-            problem_partition_pool_1 = double('problem_partition_pool_1')
-            problem_partition_pool_2 = double('problem_partition_pool_2')
-            problem_partition_pool_3 = double('problem_partition_pool_3')
-            problem_partition_pool_4 = double('problem_partition_pool_4')
+            problems = partition_problems[0..8]
+            allow(sequel_dataset).to receive(:all).and_return(problems)
 
-            expect(ThreadPool).to receive(:new).with(max_threads: 5).exactly(4).times.and_return(
-              problem_partition_pool_1,
-              problem_partition_pool_2,
-              problem_partition_pool_3,
-              problem_partition_pool_4)
+            resolver = make_resolver(@deployment)
 
-            expect(problem_partition_pool_1).to receive(:wrap).ordered.once.and_yield(problem_partition_pool_1)
-            expect(problem_partition_pool_1).to receive(:process).exactly(1).times.and_yield
+            problem_partition_pool = double('problem_partition_pool')
+            expect(ThreadPool).to receive(:new).with(max_threads: 5).once.and_return(problem_partition_pool)
+            expect(problem_partition_pool).to receive(:wrap).ordered.once.and_yield(problem_partition_pool)
+            expect(problem_partition_pool).to receive(:process).exactly(2).times.and_yield
 
-            expect(problem_partition_pool_2).to receive(:wrap).ordered.once.and_yield(problem_partition_pool_2)
-            expect(problem_partition_pool_2).to receive(:process).exactly(2).times.and_yield
+            expect(resolver).to receive(:process_problem_partition).once.with(current_problem_partitions[0][0]).and_call_original
+            expect(resolver).to receive(:process_problem_partition).once.with(current_problem_partitions[1][0]).and_call_original
+            expect(resolver).to receive(:process_problem_partition).once.with(current_problem_partitions[1][1]).and_call_original
+            expect(resolver).to receive(:process_problem_partition).once.with(current_problem_partitions[2][0]).and_call_original
+            expect(resolver).to receive(:process_problem_partition).once.with(current_problem_partitions[3][0]).and_call_original
 
-            expect(problem_partition_pool_3).to receive(:wrap).ordered.once.and_yield(problem_partition_pool_3)
-            expect(problem_partition_pool_3).to receive(:process).exactly(1).times.and_yield
-
-            expect(problem_partition_pool_4).to receive(:wrap).ordered.once.and_yield(problem_partition_pool_4)
-            expect(problem_partition_pool_4).to receive(:process).exactly(1).times.and_yield
-
-            instance_group_0_pool = double('instance_group_0_pool')
             instance_group_1_pool = double('instance_group_1_pool')
-            instance_group_2_pool = double('instance_group_2_pool')
-            instance_group_3_pool = double('instance_group_3_pool')
-            instance_group_4_pool = double('instance_group_4_pool')
-
-            expect(ThreadPool).to receive(:new).with(max_threads: 2).and_return(instance_group_0_pool)
-            expect(instance_group_0_pool).to receive(:wrap).once.and_yield(instance_group_0_pool)
-            expect(instance_group_0_pool).to receive(:process).exactly(2).times.and_yield
-
-            expect(ThreadPool).to receive(:new).with(max_threads: 3).and_return(instance_group_1_pool)
+            expect(ThreadPool).to receive(:new).with(max_threads: 3).once.and_return(instance_group_1_pool)
             expect(instance_group_1_pool).to receive(:wrap).once.and_yield(instance_group_1_pool)
             expect(instance_group_1_pool).to receive(:process).exactly(2).times.and_yield
 
-            expect(ThreadPool).to receive(:new).with(max_threads: 4).and_return(instance_group_2_pool)
+            instance_group_2_pool = double('instance_group_2_pool')
+            expect(ThreadPool).to receive(:new).with(max_threads: 4).once.and_return(instance_group_2_pool)
             expect(instance_group_2_pool).to receive(:wrap).once.and_yield(instance_group_2_pool)
             expect(instance_group_2_pool).to receive(:process).exactly(2).times.and_yield
 
-            expect(ThreadPool).to receive(:new).with(max_threads: 2).and_return(instance_group_3_pool)
-            expect(instance_group_3_pool).to receive(:wrap).once.and_yield(instance_group_3_pool)
-            expect(instance_group_3_pool).to receive(:process).exactly(1).times.and_yield
-
-            expect(ThreadPool).to receive(:new).with(max_threads: 1).and_return(instance_group_4_pool)
+            instance_group_4_pool = double('instance_group_4_pool')
+            expect(ThreadPool).to receive(:new).with(max_threads: 5).once.and_return(instance_group_4_pool)
             expect(instance_group_4_pool).to receive(:wrap).once.and_yield(instance_group_4_pool)
             expect(instance_group_4_pool).to receive(:process).exactly(2).times.and_yield
 
-            resolver = make_resolver(@deployment)
+            expect(resolver).to receive(:process_problem).exactly(9).times
+
             resolver.apply_resolutions({})
           end
         end

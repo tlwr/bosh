@@ -13,7 +13,8 @@ module Bosh::Director
     end
 
     def ==(other)
-      problems == other.problems &&
+      !other.nil? && other.instance_of?(ProblemPartition) &&
+        problems == other.problems &&
         instance_group_name == other.instance_group_name &&
         serial == other.serial &&
         max_in_flight == other.max_in_flight

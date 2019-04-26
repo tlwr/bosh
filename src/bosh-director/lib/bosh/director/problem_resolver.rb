@@ -48,7 +48,7 @@ module Bosh::Director
     private
 
     def process_problem_partitions(problem_partitions)
-      #if problem_partitions.length > 1
+      if problem_partitions.length > 1
         ThreadPool.new(max_threads: Config.max_threads).wrap do |pool|
           problem_partitions.each do |problem_partition|
             pool.process do
@@ -56,18 +56,22 @@ module Bosh::Director
             end
           end
         end
-      #else
-      #  process_problem_partition(problem_partitions.first) unless problem_partitions.empty?
-      #end
+      else
+        process_problem_partition(problem_partitions.first) unless problem_partitions.empty?
+      end
     end
 
     def process_problem_partition(problem_partition)
-      ThreadPool.new(max_threads: problem_partition.max_in_flight).wrap do |problem_pool|
-        problem_partition.problems.each do |problem|
-          problem_pool.process do
-            process_problem(problem)
+      if problem_partition.problems.length > 1
+        ThreadPool.new(max_threads: problem_partition.max_in_flight).wrap do |problem_pool|
+          problem_partition.problems.each do |problem|
+            problem_pool.process do
+              process_problem(problem)
+            end
           end
         end
+      else
+       process_problem(problem_partition.problems.first) unless problem_partition.problems.empty?
       end
     end
 

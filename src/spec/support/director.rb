@@ -165,6 +165,10 @@ module Bosh::Spec
 
       resurrected_vm = wait_for_vm(vm.instance_group_name, vm.index, 300, options)
 
+      if resurrected_vm.nil?
+        raise "expected vm to be recreated but resurrection failed. original: #{vm.inspect}"
+      end
+
       if vm.vm_cid == resurrected_vm.vm_cid
         raise "expected vm to be recreated by cids match. original: #{vm.inspect}, new: #{resurrected_vm.inspect}"
       end

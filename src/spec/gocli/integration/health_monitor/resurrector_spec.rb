@@ -96,6 +96,10 @@ describe 'resurrector', type: :integration, hm: true do
   end
 
   fit 'resurrects vms in serial and parallel' do
+    resurrection_config_enabled = yaml_file('config.yml', Bosh::Spec::NewDeployments.resurrection_config_enabled)
+    bosh_runner.run("update-config --type resurrection --name enabled #{resurrection_config_enabled.path}")
+    current_sandbox.reconfigure_health_monitor
+
     deployment_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
     deployment_hash['instance_groups'][0]['instances'] = 2
     job2_opts = {
