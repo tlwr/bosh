@@ -1,5 +1,6 @@
 module Bosh::Director
   module Jobs
+    require_relative 'base_job'
     class UpdateDeployment < BaseJob
       include LockHelper
       include LegacyDeploymentHelper
@@ -50,6 +51,20 @@ module Bosh::Director
         handle_toplevel_exception(e, context)
       ensure
         lock_variable_set
+      end
+
+      def deployment_plan
+        return @deployment_plan if @deployment_plan
+
+        deployment_manifest = Manifest.load_from_hash(manifest_hash, manifest_text, cloud_config_models, runtime_config_models)
+        planner_factory = DeploymentPlan::PlannerFactory.create(logger)
+
+        @deployment_plan = planner_factory.create_from_manifest(
+          deployment_manifest,
+          cloud_config_models,
+          runtime_config_models,
+          @options,
+        )
       end
 
       private
@@ -369,20 +384,6 @@ module Bosh::Director
 
       def notifier
         @notifier ||= DeploymentPlan::Notifier.new(deployment_name, Config.nats_rpc, logger)
-      end
-
-      def deployment_plan
-        return @deployment_plan if @deployment_plan
-
-        deployment_manifest = Manifest.load_from_hash(manifest_hash, manifest_text, cloud_config_models, runtime_config_models)
-        planner_factory = DeploymentPlan::PlannerFactory.create(logger)
-
-        @deployment_plan = planner_factory.create_from_manifest(
-          deployment_manifest,
-          cloud_config_models,
-          runtime_config_models,
-          @options,
-        )
       end
 
       def links_manager
