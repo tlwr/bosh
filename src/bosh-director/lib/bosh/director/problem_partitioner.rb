@@ -63,6 +63,7 @@ module Bosh::Director
       end
 
       def get_instance_group_name(instance_id)
+        #TODO the problem.resource_id can be both, a instance_id and a disk_id. To retrieve the instance group both problem types have to be supported
         Models::Instance.where(id: instance_id).first.job
       end
     end
