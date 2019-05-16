@@ -9,9 +9,25 @@ module Bosh::Director
     let(:task) { Bosh::Director::Models::Task.make(id: 42, username: 'user') }
     let(:task_writer) { Bosh::Director::TaskDBWriter.new(:event_output, task.id) }
     let(:event_log) { Bosh::Director::EventLog::Log.new(task_writer) }
+    let(:update_deployment) { double }
+    let(:parallel_update_config) { instance_double('Bosh::Director::DeploymentPlan::UpdateConfig', serial?: false) }
+    #TODO: do we need 5 igs? isn't it possible to reset the dataase after each test such that
+    #the job-count doesn't get incremented between tests
+    let(:igs) do
+      igs = []
+      (1..6).each do |i|
+        igs << instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: "job-#{i}", update: parallel_update_config)
+      end
+      igs
+    end
+
     before(:each) do
       @deployment = Models::Deployment.make(name: 'mycloud')
-      @other_deployment = Models::Deployment.make(name: 'othercloud')
+
+      allow(Bosh::Director::Jobs::UpdateDeployment).to receive(:new).and_return(update_deployment)
+      allow(update_deployment).to receive_message_chain(:deployment_plan, :instance_groups).and_return(igs)
+      allow(parallel_update_config).to receive(:max_in_flight).and_return(5)
+
       allow(Bosh::Director::Config).to receive(:current_job).and_return(job)
       allow(Bosh::Director::Config).to receive(:event_log).and_return(event_log)
       allow(Bosh::Director::Config).to receive(:parallel_problem_resolution).and_return(true)
@@ -33,13 +49,19 @@ module Bosh::Director
 
     describe '#apply_resolutions' do
       context 'when execution succeeds' do
+        let(:number_of_instance_groups_with_problems) { 2 }
+        let(:max_threads) { 10 }
         before do
-          allow(Bosh::Director::Config).to receive(:max_threads).and_return(5)
+          allow(Bosh::Director::Config).to receive(:max_threads).and_return(max_threads)
         end
+
         context 'when parallel resurrection is turned on' do
           it 'resolves the problems parallel' do
             test_apply_resolutions
-            expect(ThreadPool).to have_received(:new).with(max_threads: 5)
+            # outer thread pool
+            expect(ThreadPool).to have_received(:new).once.with(max_threads: [number_of_instance_groups_with_problems, max_threads].min)
+            # inner thread pools
+            expect(ThreadPool).to have_received(:new).twice.with(max_threads: 1)
           end
         end
 
@@ -63,7 +85,9 @@ module Bosh::Director
 
           allow(AgentClient).to receive(:with_agent_id).and_return(agent)
 
-          2.times do
+          number_of_instance_groups_with_problems.times do
+            # instance = Models::Instance.make(job: ig_1.name, deployment_id: @deployment.id)
+            # , instance_id: instance.id)
             disk = Models::PersistentDisk.make(active: false)
             disks << disk
             problems << inactive_disk(disk.id)
@@ -82,45 +106,35 @@ module Bosh::Director
           expect(Models::DeploymentProblem.filter(state: 'open').count).to eq(0)
         end
 
-        it 'notices and logs extra resolutions' do
-          disks = (1..3).map { |_| Models::PersistentDisk.make(active: false) }
+        it 'logs already resolved problem' do
+          disk = Models::PersistentDisk.make
+          problem = Models::DeploymentProblem.make(deployment_id: @deployment.id,
+                                                   resource_id: disk.id,
+                                                   type: 'inactive_disk',
+                                                   state: 'resolved')
+          resolver = make_resolver(@deployment)
+          expect(resolver).to receive(:track_and_log).once.with("Ignoring problem #{problem.id} (state is 'resolved')")
+          count, err_message = resolver.apply_resolutions(problem.id.to_s => 'delete_disk')
+          expect(count).to eq(0)
+          expect(err_message).to be_nil
+        end
 
-          problems = [
-            inactive_disk(disks[0].id),
-            inactive_disk(disks[1].id),
-            inactive_disk(disks[2].id, @other_deployment.id),
-          ]
-
-          resolver1 = make_resolver(@deployment)
-          expect(resolver1.apply_resolutions(problems[0].id.to_s => 'ignore', problems[1].id.to_s => 'ignore')).to eq([2, nil])
-
-          resolver2 = make_resolver(@deployment)
-
-          messages = []
-          expect(resolver2).to receive(:track_and_log).exactly(3).times { |message| messages << message }
-          resolver2.apply_resolutions(
-            problems[0].id.to_s => 'ignore',
-            problems[1].id.to_s => 'ignore',
-            problems[2].id.to_s => 'ignore',
+        it 'ignores non-existing problems' do
+          resolver = make_resolver(@deployment)
+          expect(resolver.apply_resolutions(
             '9999999' => 'ignore',
             '318' => 'do_stuff',
-          )
-
-          expect(messages).to match_array([
-                                            "Ignoring problem #{problems[0].id} (state is 'resolved')",
-                                            "Ignoring problem #{problems[1].id} (state is 'resolved')",
-                                            "Ignoring problem #{problems[2].id} (not a part of this deployment)",
-                                          ])
+          )).to eq([0, nil])
         end
       end
 
-      context 'when execution fails' do
-        it 'raises error and logs' do
-          backtrace = anything
-          disk = Models::PersistentDisk.make(active: false)
-          problem = inactive_disk(disk.id)
-          resolver = make_resolver(@deployment)
+      context 'when problem resolution fails' do
+        let(:backtrace) { anything }
+        let(:disk) { Models::PersistentDisk.make(active: false) }
+        let(:problem) { inactive_disk(disk.id) }
+        let(:resolver) { make_resolver(@deployment) }
 
+        it 'rescues ProblemHandlerError and logs' do
           expect(resolver).to receive(:track_and_log)
             .and_raise(Bosh::Director::ProblemHandlerError.new('Resolution failed'))
           expect(logger).to receive(:error).with("Error resolving problem '#{problem.id}': Resolution failed")
@@ -131,15 +145,8 @@ module Bosh::Director
           expect(error_message).to eq("Error resolving problem '#{problem.id}': Resolution failed")
           expect(count).to eq(1)
         end
-      end
 
-      context 'when execution fails because of other errors' do
-        it 'raises error and logs' do
-          backtrace = anything
-          disk = Models::PersistentDisk.make(active: false)
-          problem = inactive_disk(disk.id)
-          resolver = make_resolver(@deployment)
-
+        it 'rescues StandardError and logs' do
           expect(ProblemHandlers::Base).to receive(:create_from_model)
             .and_raise(StandardError.new('Model creation failed'))
           expect(logger).to receive(:error).with("Error resolving problem '#{problem.id}': Model creation failed")

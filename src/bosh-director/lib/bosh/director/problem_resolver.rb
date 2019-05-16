@@ -1,4 +1,5 @@
-require_relative 'jobs/update_deployment'
+require 'bosh/director/jobs/update_deployment'
+# require_relative 'jobs/update_deployment'
 
 module Bosh::Director
   class ProblemResolver
@@ -37,15 +38,14 @@ module Bosh::Director
 
     def apply_resolutions(resolutions)
       @resolutions = resolutions
-      problems = Models::DeploymentProblem.where(id: resolutions.keys)
-
-      begin_stage('Applying problem resolutions', problems.count)
+      problems = Models::DeploymentProblem.where(id: resolutions.keys, deployment_id: @deployment.id).all
+      begin_stage('Applying problem resolutions', problems.size)
 
       if Config.parallel_problem_resolution
-        # TODO: here we just assume :type recreate VM,
-        # make sure that other problem types like re-attach disk still work
-        problems_ordered_by_job(problems.all) do |probs, max_in_flight|
-          number_of_threads = [probs.size, max_in_flight].min
+        ig_to_problems =  problems_by_instance_group(problems)
+
+        problems_serially_ordered_by_job(ig_to_problems) do |probs, max_in_flight|
+          number_of_threads = [probs.size, max_in_flight, Config.max_threads].min
           ThreadPool.new(max_threads: number_of_threads).wrap do |pool|
             probs.each do |problem|
               pool.process do
@@ -68,34 +68,31 @@ module Bosh::Director
     private
 
     def process_problem(problem)
-      if problem.state != 'open'
-        reason = "state is '#{problem.state}'"
-        track_and_log("Ignoring problem #{problem.id} (#{reason})")
-      elsif problem.deployment_id != @deployment.id
-        reason = 'not a part of this deployment'
-        track_and_log("Ignoring problem #{problem.id} (#{reason})")
-      else
+      if problem.open?
         apply_resolution(problem)
+      else
+        track_and_log("Ignoring problem #{problem.id} (state is '#{problem.state}')")
       end
     end
 
-    def problems_ordered_by_job(problems, &block)
+    def problems_serially_ordered_by_job(ig_to_problems, &block)
       BatchMultiInstanceGroupUpdater.partition_jobs_by_serial(@instance_groups).each do |jp|
         if jp.first.update.serial?
           # all instance groups in this partition are serial
           jp.each do |ig|
-            process_ig(ig, problems, block)
+            process_ig(ig, ig_to_problems, block)
           end
         else
           # all instance groups in this partition are non-serial
           # therefore, parallelize recreation of all instances in this partition
           # therefore, create an outer ThreadPool as ParallelMultiInstanceGroupUpdater does it in the regular deploy flow
-
-          # TODO: might not want to create a new thread for instance_groups without problems
-          ThreadPool.new(max_threads: jp.size).wrap do |pool|
-            jp.each do |ig|
+          igs_with_problems = jp.select do |ig|
+            ig_to_problems.key?(ig.name)
+          end
+          ThreadPool.new(max_threads: [igs_with_problems.size, Config.max_threads].min).wrap do |pool|
+            igs_with_problems.each do |ig|
               pool.process do
-                process_ig(ig, problems, block)
+                process_ig(ig, ig_to_problems, block)
               end
             end
           end
@@ -103,23 +100,34 @@ module Bosh::Director
       end
     end
 
-    def process_ig(ig, problems, block)
+    def process_ig(ig, ig_to_problems, block)
       instance_group = @instance_groups.find do |plan_ig|
         plan_ig.name == ig.name
       end
-      probs = select_problems_by_instance_group(problems, ig)
-      max_in_flight = instance_group.update.max_in_flight(probs.size)
+      problems = ig_to_problems[ig.name]
+      max_in_flight = instance_group.update.max_in_flight(problems.size)
       # within an instance_group parallelize recreation of all instances
-      block.call(probs, max_in_flight)
+      block.call(problems, max_in_flight)
     end
 
-    def select_problems_by_instance_group(problems, instance_group)
-      problems.select do |p|
-        # TODO do not select the instance of every problem
-        # instead: push the instance_group.name condition to the database (by a second where clause?)
-        instance = Models::Instance.where(:id=>p.resource_id).first # resource_id corresponds to the primary key of the instances table
-        instance.job == instance_group.name
+    def problems_by_instance_group(problems)
+      instance_group_to_problems = {}
+      problems.each do |p|
+        begin
+          instance_problem = p.instance_problem?
+        rescue StandardError => e
+          log_resolution_error(p, e)
+          next
+        end
+        if instance_problem
+          instance = Models::Instance.where(id: p.resource_id).first
+        else
+          disk = Models::PersistentDisk.where(id: p.resource_id).first
+          instance = Models::Instance.where(id: disk.instance_id).first if disk
+        end
+        ( instance_group_to_problems[instance.job] ||= [] ) << p if instance
       end
+      instance_group_to_problems
     end
 
     def apply_resolution(problem)
@@ -143,7 +151,7 @@ module Bosh::Director
       problem.save
       @resolved_count += 1
 
-    rescue => e
+    rescue StandardError => e
       log_resolution_error(problem, e)
     end
 
