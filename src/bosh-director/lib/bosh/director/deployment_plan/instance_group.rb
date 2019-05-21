@@ -125,15 +125,15 @@ module Bosh::Director
 
       def sorted_instance_plans
         @sorted_instance_plans ||= InstancePlanSorter.new(@logger)
-                                                     .sort(@instance_plans.reject(&:obsolete?))
+                                     .sort(@instance_plans.reject(&:obsolete?))
       end
 
       def unignored_instance_plans_needing_duplicate_vm
-        @shutdown_instances ||= sorted_instance_plans.select { |plan| plan.instance&.vm_created? }
-                                                     .select(&:needs_duplicate_vm?)
-                                                     .reject(&:new?)
-                                                     .reject(&:should_be_ignored?)
-                                                     .reject { |plan| plan.instance.state == 'detached' }
+        @shutdown_instances ||= sorted_instance_plans.select {|plan| plan.instance&.vm_created?}
+                                  .select(&:needs_duplicate_vm?)
+                                  .reject(&:new?)
+                                  .reject(&:should_be_ignored?)
+                                  .reject {|plan| plan.instance.state == 'detached'}
       end
 
       def add_job(job_to_add)
@@ -182,7 +182,7 @@ module Bosh::Director
       # populate agent state.
       # @return [Hash] Hash representation
       def spec
-        result = { 'name' => @name, 'templates' => [] }
+        result = {'name' => @name, 'templates' => []}
 
         return nil if @jobs.empty?
 
@@ -215,7 +215,7 @@ module Bosh::Director
       def package_spec
         @packages.each_with_object({}) do |(name, package), acc|
           acc[name] = package.spec
-        end.select { |name, _| run_time_dependencies.include? name }
+        end.select {|name, _| run_time_dependencies.include? name}
       end
 
       def instance(index)
@@ -271,7 +271,7 @@ module Bosh::Director
 
         jobs.each do |job|
           job.model.package_names.each do |package_name|
-            package = job.release.model.packages.find { |p| p.name == package_name }
+            package = job.release.model.packages.find {|p| p.name == package_name}
 
             releases_by_package_names[package_name] ||= {
               usages: [],
@@ -287,7 +287,7 @@ module Bosh::Director
         end
 
         releases_by_package_names.each do |package_name, packages|
-          releases = packages[:usages].group_by { |u| u[:fingerprint] + u[:dependency_set_json] }
+          releases = packages[:usages].group_by {|u| u[:fingerprint] + u[:dependency_set_json]}
 
           next unless releases.size > 1
 
@@ -353,7 +353,7 @@ module Bosh::Director
       end
 
       def has_job?(name, release)
-        @jobs.any? { |job| job.name == name && job.release.name == release }
+        @jobs.any? {|job| job.name == name && job.release.name == release}
       end
 
       def has_os?(os)
