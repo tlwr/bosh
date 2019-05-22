@@ -279,7 +279,9 @@ describe 'deploy with create-swap-delete', type: :integration do
           output = deploy_simple_manifest(manifest_hash: manifest, recreate: true, failure_expected: true)
           expect(output).to include("Failed to reserve IP")
 
-          _, exit_code = deploy_simple_manifest(manifest_hash: manifest, cloud_config: larger_network_cloud_config, recreate: true, return_exit_code: true)
+          upload_cloud_config(cloud_config_hash: larger_network_cloud_config)
+
+          _, exit_code = deploy_simple_manifest(manifest_hash: manifest, recreate: true, return_exit_code: true)
           expect(exit_code).to eq(0)
         end
       end
@@ -291,13 +293,13 @@ describe 'deploy with create-swap-delete', type: :integration do
       let(:cloud_config) do
         cloud_config = Bosh::Spec::NewDeployments.simple_cloud_config
         cloud_config['networks'][0]['type'] = network_type
-        cloud_config['networks'][0]['subnets'][0]['range'] = '192.168.1.0/29' # 192.168.1.0 - 192.168.1.7 broadcast
-        cloud_config['networks'][0]['subnets'][0]['reserved'] = ['192.168.1.1', '192.168.1.2']
+        cloud_config['networks'][0]['subnets'][0]['range'] = '192.168.1.0/29'
+        cloud_config['networks'][0]['subnets'][0]['reserved'] = ['192.168.1.1']
         cloud_config['networks'][0]['subnets'][0].delete('static')
         cloud_config
       end
 
-      let(:instance_count) { 3 }
+      let(:instance_count) { 2 }
 
       let(:manifest) do
         manifest = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups(instances: instance_count)
@@ -320,12 +322,12 @@ describe 'deploy with create-swap-delete', type: :integration do
       end
 
       before do
-        output = deploy_simple_manifest(manifest_hash: manifest_with_bad_templating, failure_expected: true)
+        output = deploy_simple_manifest(manifest_hash: manifest_with_bad_templating, recreate: true, failure_expected: true)
         expect(output).to include('Unable to render instance groups')
       end
 
       it 'does not leak IPs' do
-        manifest = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups(instances: instance_count)
+        manifest = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups(instances: 4)
         manifest['update'] = manifest['update'].merge('vm_strategy' => 'delete-create')
         _, exit_code = deploy_simple_manifest(manifest_hash: manifest, return_exit_code: true)
         expect(exit_code).to eq(0)
