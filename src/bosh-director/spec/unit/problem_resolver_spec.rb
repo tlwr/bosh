@@ -10,13 +10,14 @@ module Bosh::Director
     let(:task_writer) { Bosh::Director::TaskDBWriter.new(:event_output, task.id) }
     let(:event_log) { Bosh::Director::EventLog::Log.new(task_writer) }
     let(:update_deployment) { double }
+    let(:parallel_problem_resolution) { true }
     let(:parallel_update_config) { instance_double('Bosh::Director::DeploymentPlan::UpdateConfig', serial?: false) }
-    #TODO: do we need 5 igs? isn't it possible to reset the dataase after each test such that
-    #the job-count doesn't get incremented between tests
+    let(:n_igs_with_problems) { 4 }
+    let(:n_problems_in_ig) { 3 }
     let(:igs) do
       igs = []
-      (1..6).each do |i|
-        igs << instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: "job-#{i}", update: parallel_update_config)
+      (1..n_igs_with_problems).each do |i|
+        igs << instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: "ig-#{i}", update: parallel_update_config)
       end
       igs
     end
@@ -26,11 +27,10 @@ module Bosh::Director
 
       allow(Bosh::Director::Jobs::UpdateDeployment).to receive(:new).and_return(update_deployment)
       allow(update_deployment).to receive_message_chain(:deployment_plan, :instance_groups).and_return(igs)
-      allow(parallel_update_config).to receive(:max_in_flight).and_return(5)
 
       allow(Bosh::Director::Config).to receive(:current_job).and_return(job)
       allow(Bosh::Director::Config).to receive(:event_log).and_return(event_log)
-      allow(Bosh::Director::Config).to receive(:parallel_problem_resolution).and_return(true)
+      allow(Bosh::Director::Config).to receive(:parallel_problem_resolution).and_return(parallel_problem_resolution)
 
       allow(Bosh::Director::CloudFactory).to receive(:create).and_return(cloud_factory)
       allow(cloud_factory).to receive(:get).with('', nil).and_return(cloud)
@@ -47,71 +47,194 @@ module Bosh::Director
                                      state: 'open')
     end
 
+    def test_instance_apply_resolutions
+      problem_resolutions = {}
+      (1..n_igs_with_problems).each do |n|
+        n_problems_in_ig.times do
+          instance = Models::Instance.make(job: "ig-#{n}", deployment_id: @deployment.id)
+          problem = Models::DeploymentProblem.make(
+            deployment_id: @deployment.id,
+            resource_id: instance.id,
+            type: 'missing_vm',
+            state: 'open',
+          )
+          problem_resolutions[problem.id.to_s] = 'recreate_vm'
+        end
+      end
+
+      resolver = make_resolver(@deployment)
+      problem_handler = ProblemHandlers::MissingVM.new(1, nil)
+      allow(ProblemHandlers::Base).to receive(:create_from_model).and_return(problem_handler)
+
+      expect(problem_handler).to receive(:recreate_vm).exactly(problem_resolutions.size).times
+      expect(resolver.apply_resolutions(problem_resolutions)).to eq([problem_resolutions.size, nil])
+      expect(Models::DeploymentProblem.filter(state: 'open').count).to eq(0)
+    end
+
     describe '#apply_resolutions' do
       context 'when execution succeeds' do
-        let(:number_of_instance_groups_with_problems) { 2 }
         let(:max_threads) { 10 }
+        let(:max_in_flight) { 5 }
+
         before do
           allow(Bosh::Director::Config).to receive(:max_threads).and_return(max_threads)
+          allow(parallel_update_config).to receive(:max_in_flight).and_return(max_in_flight)
         end
 
         context 'when parallel resurrection is turned on' do
-          it 'resolves the problems parallel' do
-            test_apply_resolutions
-            # outer thread pool
-            expect(ThreadPool).to have_received(:new).once.with(max_threads: [number_of_instance_groups_with_problems, max_threads].min)
-            # inner thread pools
-            expect(ThreadPool).to have_received(:new).twice.with(max_threads: 1)
+          context 'when only one problem exists per instance group' do
+            let(:n_igs_with_problems) { 1 }
+            let(:n_problems_in_ig) { 1 }
+
+            it 'does not create a threadpool for processing the problem' do
+              test_instance_apply_resolutions
+              expect(ThreadPool).not_to have_received(:new)
+            end
+          end
+
+          context 'when max_threads is one' do
+            let(:max_threads) { 1 }
+
+            it 'does not create a threadpool for processing the problem' do
+              test_instance_apply_resolutions
+              expect(ThreadPool).not_to have_received(:new)
+            end
+          end
+
+          context 'when max_in_flight is one' do
+            let(:max_in_flight) { 1 }
+
+            it 'does not create a threadpool for processing the problem' do
+              test_instance_apply_resolutions
+              expect(ThreadPool).to have_received(:new).once.with(max_threads: n_igs_with_problems)
+            end
+          end
+
+          context 'when serial is globally false' do
+            context 'when the number instances with problems is smaller than max_in_flight and max_threads' do
+              it 'respects number of instances with problems' do
+                test_instance_apply_resolutions
+                n_outer_threadpool_called = 1
+                n_inner_threadpool_called = 4
+
+                expect(ThreadPool).to have_received(:new).exactly(
+                  n_outer_threadpool_called,
+                ).times.with(max_threads: n_igs_with_problems)
+                expect(ThreadPool).to have_received(:new).exactly(
+                  n_inner_threadpool_called,
+                ).times.with(max_threads: n_problems_in_ig)
+              end
+            end
+
+            context 'when max_in_flight is smaller than the number of instances with problems and max_threads' do
+              let(:max_in_flight) { 2 }
+
+              it 'respects max_in_flight' do
+                test_instance_apply_resolutions
+                n_outer_threadpool_called = 1
+                n_inner_threadpool_called = 4
+
+                expect(ThreadPool).to have_received(:new).exactly(
+                  n_outer_threadpool_called,
+                ).times.with(max_threads: n_igs_with_problems)
+                expect(ThreadPool).to have_received(:new).exactly(
+                  n_inner_threadpool_called,
+                ).times.with(max_threads: max_in_flight)
+              end
+            end
+
+            context 'when max_threads is smaller than the number of instances with problems and max_in_flight' do
+              let(:max_threads) { 2 }
+              it 'respects max_threads' do
+                test_instance_apply_resolutions
+                n_outer_threadpool_called = 1
+                n_inner_threadpool_called = 4
+
+                expect(ThreadPool).to have_received(:new).exactly(
+                  n_outer_threadpool_called + n_inner_threadpool_called,
+                ).times.with(max_threads: max_threads)
+              end
+            end
+          end
+
+          context 'when serial is true for some instance groups' do
+            let(:serial_update_config) { instance_double('Bosh::Director::DeploymentPlan::UpdateConfig', serial?: true) }
+            let(:igs) do
+              [
+                instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'ig-1', update: serial_update_config),
+                instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'ig-2', update: parallel_update_config),
+                instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'ig-3', update: parallel_update_config),
+                instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'ig-4', update: serial_update_config),
+              ]
+            end
+            before do
+              allow(serial_update_config).to receive(:max_in_flight).and_return(max_in_flight)
+            end
+
+            it 'respects serial' do
+              test_instance_apply_resolutions
+              n_outer_threadpool_called = 1
+              n_inner_threadpool_called = 2
+
+              expect(ThreadPool).to have_received(:new).exactly(n_outer_threadpool_called).times.with(max_threads: 2)
+              expect(ThreadPool).to have_received(:new).exactly(n_inner_threadpool_called).times.with(max_threads: 3)
+            end
           end
         end
 
         context 'when parallel resurrection is turned off' do
-          before do
-            allow(Bosh::Director::Config).to receive(:parallel_problem_resolution).and_return(false)
-          end
+          let(:parallel_problem_resolution) { false }
+
           it 'resolves the problems serial' do
-            test_apply_resolutions
+            test_instance_apply_resolutions
             expect(ThreadPool).not_to have_received(:new)
           end
         end
 
-        def test_apply_resolutions
+        it 'can resolve persistent disk problems' do
           disks = []
           problems = []
 
           agent = double('agent')
           expect(agent).to receive(:list_disk).and_return([])
           expect(cloud).to receive(:detach_disk).exactly(1).times
-
           allow(AgentClient).to receive(:with_agent_id).and_return(agent)
 
-          number_of_instance_groups_with_problems.times do
-            # instance = Models::Instance.make(job: ig_1.name, deployment_id: @deployment.id)
-            # , instance_id: instance.id)
+          2.times do
             disk = Models::PersistentDisk.make(active: false)
             disks << disk
             problems << inactive_disk(disk.id)
           end
+          disk_igs = [
+            instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'job-1', update: parallel_update_config),
+            instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'job-2', update: parallel_update_config),
+          ]
+          allow(update_deployment).to receive_message_chain(:deployment_plan, :instance_groups).and_return(disk_igs)
 
           resolver = make_resolver(@deployment)
 
-          expect(resolver).to receive(:track_and_log).with(/Disk 'disk-cid-\d+' \(0M\) for instance 'job-\d+\/uuid-\d+ \(\d+\)' is inactive \(.*\): .*/).twice.and_call_original
-
-          expect(resolver.apply_resolutions(problems[0].id.to_s => 'delete_disk', problems[1].id.to_s => 'ignore'))
-            .to eq([2, nil])
-
+          expect(resolver).to receive(:track_and_log).with(
+            %r{Disk 'disk-cid-\d+' \(0M\) for instance 'job-\d+\/uuid-\d+ \(\d+\)' is inactive \(.*\): .*},
+          ).twice.and_call_original
+          expect(
+            resolver.apply_resolutions(
+              problems[0].id.to_s => 'delete_disk',
+              problems[1].id.to_s => 'ignore',
+            ),
+          ).to eq([2, nil])
           expect(Models::PersistentDisk.find(id: disks[0].id)).to be_nil
           expect(Models::PersistentDisk.find(id: disks[1].id)).not_to be_nil
-
           expect(Models::DeploymentProblem.filter(state: 'open').count).to eq(0)
         end
 
         it 'logs already resolved problem' do
           disk = Models::PersistentDisk.make
-          problem = Models::DeploymentProblem.make(deployment_id: @deployment.id,
-                                                   resource_id: disk.id,
-                                                   type: 'inactive_disk',
-                                                   state: 'resolved')
+          problem = Models::DeploymentProblem.make(
+            deployment_id: @deployment.id,
+            resource_id: disk.id,
+            type: 'inactive_disk',
+            state: 'resolved',
+          )
           resolver = make_resolver(@deployment)
           expect(resolver).to receive(:track_and_log).once.with("Ignoring problem #{problem.id} (state is 'resolved')")
           count, err_message = resolver.apply_resolutions(problem.id.to_s => 'delete_disk')
@@ -121,10 +244,12 @@ module Bosh::Director
 
         it 'ignores non-existing problems' do
           resolver = make_resolver(@deployment)
-          expect(resolver.apply_resolutions(
-            '9999999' => 'ignore',
-            '318' => 'do_stuff',
-          )).to eq([0, nil])
+          expect(
+            resolver.apply_resolutions(
+              '9999999' => 'ignore',
+              '318' => 'do_stuff',
+            ),
+          ).to eq([0, nil])
         end
       end
 

@@ -1,5 +1,4 @@
-require 'bosh/director/jobs/update_deployment'
-# require_relative 'jobs/update_deployment'
+require_relative 'jobs/update_deployment'
 
 module Bosh::Director
   class ProblemResolver
@@ -18,8 +17,6 @@ module Bosh::Director
         @deployment.runtime_configs.map(&:id),
       )
       @instance_groups = update_deployment.deployment_plan.instance_groups
-
-      #temp
       @event_log_stage = nil
       @logger = Config.logger
     end
@@ -41,16 +38,21 @@ module Bosh::Director
       problems = Models::DeploymentProblem.where(id: resolutions.keys, deployment_id: @deployment.id).all
       begin_stage('Applying problem resolutions', problems.size)
 
-      if Config.parallel_problem_resolution
-        ig_to_problems =  problems_by_instance_group(problems)
-
-        problems_serially_ordered_by_job(ig_to_problems) do |probs, max_in_flight|
-          number_of_threads = [probs.size, max_in_flight, Config.max_threads].min
-          ThreadPool.new(max_threads: number_of_threads).wrap do |pool|
-            probs.each do |problem|
-              pool.process do
-                process_problem(problem)
+      if Config.parallel_problem_resolution && problems.size > 1
+        ig_to_problems = problems_by_instance_group(problems)
+        problems_serially_ordered_by_job(ig_to_problems) do |probs, max_in_flight, serial|
+          n_threads = [probs.size, max_in_flight, Config.max_threads].min
+          if !serial && n_threads > 1
+            ThreadPool.new(max_threads: n_threads).wrap do |pool|
+              probs.each do |problem|
+                pool.process do
+                  process_problem(problem)
+                end
               end
+            end
+          else
+            probs.each do |problem|
+              process_problem(problem)
             end
           end
         end
@@ -77,22 +79,22 @@ module Bosh::Director
 
     def problems_serially_ordered_by_job(ig_to_problems, &block)
       BatchMultiInstanceGroupUpdater.partition_jobs_by_serial(@instance_groups).each do |jp|
-        if jp.first.update.serial?
+        igs_with_problems = []
+        jp.each { |ig| igs_with_problems << ig.name if ig_to_problems.key?(ig.name) }
+        n_threads = [igs_with_problems.size, Config.max_threads].min
+        if jp.first.update.serial? || n_threads < 2
           # all instance groups in this partition are serial
           jp.each do |ig|
-            process_ig(ig, ig_to_problems, block)
+            process_ig(ig.name, ig_to_problems[ig.name], block)
           end
         else
           # all instance groups in this partition are non-serial
           # therefore, parallelize recreation of all instances in this partition
           # therefore, create an outer ThreadPool as ParallelMultiInstanceGroupUpdater does it in the regular deploy flow
-          igs_with_problems = jp.select do |ig|
-            ig_to_problems.key?(ig.name)
-          end
-          ThreadPool.new(max_threads: [igs_with_problems.size, Config.max_threads].min).wrap do |pool|
+          ThreadPool.new(max_threads: n_threads).wrap do |pool|
             igs_with_problems.each do |ig|
               pool.process do
-                process_ig(ig, ig_to_problems, block)
+                process_ig(ig, ig_to_problems[ig], block)
               end
             end
           end
@@ -100,14 +102,14 @@ module Bosh::Director
       end
     end
 
-    def process_ig(ig, ig_to_problems, block)
+    def process_ig(ig_name, problems, block)
       instance_group = @instance_groups.find do |plan_ig|
-        plan_ig.name == ig.name
+        plan_ig.name == ig_name
       end
-      problems = ig_to_problems[ig.name]
       max_in_flight = instance_group.update.max_in_flight(problems.size)
+      serial = instance_group.update.serial?
       # within an instance_group parallelize recreation of all instances
-      block.call(problems, max_in_flight)
+      block.call(problems, max_in_flight, serial)
     end
 
     def problems_by_instance_group(problems)
@@ -125,7 +127,7 @@ module Bosh::Director
           disk = Models::PersistentDisk.where(id: p.resource_id).first
           instance = Models::Instance.where(id: disk.instance_id).first if disk
         end
-        ( instance_group_to_problems[instance.job] ||= [] ) << p if instance
+        (instance_group_to_problems[instance.job] ||= []) << p if instance
       end
       instance_group_to_problems
     end
@@ -150,7 +152,6 @@ module Bosh::Director
       problem.state = 'resolved'
       problem.save
       @resolved_count += 1
-
     rescue StandardError => e
       log_resolution_error(problem, e)
     end
