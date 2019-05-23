@@ -33,13 +33,20 @@ module Bosh::Director
 
           notifier.send_start_event unless dry_run?
 
-          prepare_deployment
+          begin
+            prepare_deployment
 
-          warn_if_any_ignored_instances
+            warn_if_any_ignored_instances
 
-          next_releases, next_stemcells = get_stemcells_and_releases
+            next_releases, next_stemcells = get_stemcells_and_releases
 
-          context = event_context(next_releases, previous_releases, next_stemcells, previous_stemcells)
+            context = event_context(next_releases, previous_releases, next_stemcells, previous_stemcells)
+
+            render_templates_and_snapshot_errand_variables
+          rescue Exception => e
+            cleanup_orphaned_ips
+            raise e
+         end
 
           deploy(context)
 
@@ -53,9 +60,12 @@ module Bosh::Director
 
       private
 
-      def deploy(context)
-        render_templates_and_snapshot_errand_variables
+      def cleanup_orphaned_ips
+        orphaned_ips = deployment_plan.instance_models.flat_map(&:ip_addresses).reject(&:orphaned_vm).reject(&:vm_id)
+        orphaned_ips.each(&:destroy)
+      end
 
+      def deploy(context)
         return if dry_run?
 
         DeploymentPlan::Stages::PackageCompileStage.create(deployment_plan).perform

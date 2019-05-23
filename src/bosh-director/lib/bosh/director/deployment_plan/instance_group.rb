@@ -313,6 +313,8 @@ module Bosh::Director
       # TODO: Instance group should not be responsible for reserving IPs.
       # Consider moving this somewhere else? Maybe in the consumer?
       def bind_instance_networks(ip_provider)
+        # make sure to re-use orphaned IPs in hotswap, or just release them in cold-swap
+
         needed_instance_plans
           .flat_map(&:network_plans)
           .reject(&:obsolete?)

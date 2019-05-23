@@ -293,8 +293,8 @@ describe 'deploy with create-swap-delete', type: :integration do
       let(:cloud_config) do
         cloud_config = Bosh::Spec::NewDeployments.simple_cloud_config
         cloud_config['networks'][0]['type'] = network_type
-        cloud_config['networks'][0]['subnets'][0]['range'] = '192.168.1.0/29'
-        cloud_config['networks'][0]['subnets'][0]['reserved'] = ['192.168.1.1']
+        cloud_config['networks'][0]['subnets'][0]['range'] = '192.168.1.0/29' # 8 ips in range
+        cloud_config['networks'][0]['subnets'][0]['reserved'] = ['192.168.1.1']  # ips available = 8 from range - 2 auto-reserved - 1 manually reserved  = 5
         cloud_config['networks'][0]['subnets'][0].delete('static')
         cloud_config
       end
