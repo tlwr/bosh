@@ -21,6 +21,9 @@ module Bosh::Director
       end
       igs
     end
+    let(:disk_igs) do
+      [instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'disk-ig-1', update: parallel_update_config)]
+    end
 
     before(:each) do
       @deployment = Models::Deployment.make(name: 'mycloud')
@@ -110,50 +113,48 @@ module Bosh::Director
             end
           end
 
-          context 'when serial is globally false' do
-            context 'when the number instances with problems is smaller than max_in_flight and max_threads' do
-              it 'respects number of instances with problems' do
-                test_instance_apply_resolutions
-                n_outer_threadpool_called = 1
-                n_inner_threadpool_called = 4
+          context 'when the number instances with problems is smaller than max_in_flight and max_threads' do
+            it 'respects number of instances with problems' do
+              test_instance_apply_resolutions
+              n_outer_threadpool_called = 1
+              n_inner_threadpool_called = 4
 
-                expect(ThreadPool).to have_received(:new).exactly(
-                  n_outer_threadpool_called,
-                ).times.with(max_threads: n_igs_with_problems)
-                expect(ThreadPool).to have_received(:new).exactly(
-                  n_inner_threadpool_called,
-                ).times.with(max_threads: n_problems_in_ig)
-              end
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_outer_threadpool_called,
+              ).times.with(max_threads: n_igs_with_problems)
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_inner_threadpool_called,
+              ).times.with(max_threads: n_problems_in_ig)
             end
+          end
 
-            context 'when max_in_flight is smaller than the number of instances with problems and max_threads' do
-              let(:max_in_flight) { 2 }
+          context 'when max_in_flight is smaller than the number of instances with problems and max_threads' do
+            let(:max_in_flight) { 2 }
 
-              it 'respects max_in_flight' do
-                test_instance_apply_resolutions
-                n_outer_threadpool_called = 1
-                n_inner_threadpool_called = 4
+            it 'respects max_in_flight' do
+              test_instance_apply_resolutions
+              n_outer_threadpool_called = 1
+              n_inner_threadpool_called = 4
 
-                expect(ThreadPool).to have_received(:new).exactly(
-                  n_outer_threadpool_called,
-                ).times.with(max_threads: n_igs_with_problems)
-                expect(ThreadPool).to have_received(:new).exactly(
-                  n_inner_threadpool_called,
-                ).times.with(max_threads: max_in_flight)
-              end
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_outer_threadpool_called,
+              ).times.with(max_threads: n_igs_with_problems)
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_inner_threadpool_called,
+              ).times.with(max_threads: max_in_flight)
             end
+          end
 
-            context 'when max_threads is smaller than the number of instances with problems and max_in_flight' do
-              let(:max_threads) { 2 }
-              it 'respects max_threads' do
-                test_instance_apply_resolutions
-                n_outer_threadpool_called = 1
-                n_inner_threadpool_called = 4
+          context 'when max_threads is smaller than the number of instances with problems and max_in_flight' do
+            let(:max_threads) { 2 }
+            it 'respects max_threads' do
+              test_instance_apply_resolutions
+              n_outer_threadpool_called = 1
+              n_inner_threadpool_called = 4
 
-                expect(ThreadPool).to have_received(:new).exactly(
-                  n_outer_threadpool_called + n_inner_threadpool_called,
-                ).times.with(max_threads: max_threads)
-              end
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_outer_threadpool_called + n_inner_threadpool_called,
+              ).times.with(max_threads: max_threads)
             end
           end
 
@@ -191,40 +192,43 @@ module Bosh::Director
           end
         end
 
-        it 'can resolve persistent disk problems' do
-          disks = []
-          problems = []
+        context 'when instance group contains disk problems' do
+          let(:agent) { double('agent') }
 
-          agent = double('agent')
-          expect(agent).to receive(:list_disk).and_return([])
-          expect(cloud).to receive(:detach_disk).exactly(1).times
-          allow(AgentClient).to receive(:with_agent_id).and_return(agent)
+          it 'can resolve persistent disk problems' do
+            disks = []
 
-          2.times do
-            disk = Models::PersistentDisk.make(active: false)
-            disks << disk
-            problems << inactive_disk(disk.id)
+            expect(agent).to receive(:list_disk).and_return([])
+            expect(cloud).to receive(:detach_disk).exactly(1).times
+            allow(AgentClient).to receive(:with_agent_id).and_return(agent)
+
+            allow(update_deployment).to receive_message_chain(:deployment_plan, :instance_groups).and_return(disk_igs)
+            allow(Models::Instance).to receive(:make).and_return(
+              Models::Instance.make(job: 'disk-ig-1', deployment_id: @deployment.id),
+              Models::Instance.make(job: 'disk-ig-1', deployment_id: @deployment.id),
+            )
+
+            2.times do
+              disk = Models::PersistentDisk.make(active: false)
+              disks << disk
+              inactive_disk(disk.id)
+            end
+
+            resolver = make_resolver(@deployment)
+
+            expect(resolver).to receive(:track_and_log).with(
+              %r{Disk 'disk-cid-\d+' \(0M\) for instance 'disk-ig-\d+\/uuid-\d+ \(\d+\)' is inactive \(.*\): .*},
+            ).twice.and_call_original
+            expect(
+              resolver.apply_resolutions(
+                '1' => 'delete_disk',
+                '2' => 'ignore',
+              ),
+            ).to eq([2, nil])
+            expect(Models::PersistentDisk.find(id: disks[0].id)).to be_nil
+            expect(Models::PersistentDisk.find(id: disks[1].id)).not_to be_nil
+            expect(Models::DeploymentProblem.filter(state: 'open').count).to eq(0)
           end
-          disk_igs = [
-            instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'job-1', update: parallel_update_config),
-            instance_double('Bosh::Director::DeploymentPlan::InstanceGroup', name: 'job-2', update: parallel_update_config),
-          ]
-          allow(update_deployment).to receive_message_chain(:deployment_plan, :instance_groups).and_return(disk_igs)
-
-          resolver = make_resolver(@deployment)
-
-          expect(resolver).to receive(:track_and_log).with(
-            %r{Disk 'disk-cid-\d+' \(0M\) for instance 'job-\d+\/uuid-\d+ \(\d+\)' is inactive \(.*\): .*},
-          ).twice.and_call_original
-          expect(
-            resolver.apply_resolutions(
-              problems[0].id.to_s => 'delete_disk',
-              problems[1].id.to_s => 'ignore',
-            ),
-          ).to eq([2, nil])
-          expect(Models::PersistentDisk.find(id: disks[0].id)).to be_nil
-          expect(Models::PersistentDisk.find(id: disks[1].id)).not_to be_nil
-          expect(Models::DeploymentProblem.filter(state: 'open').count).to eq(0)
         end
 
         it 'logs already resolved problem' do
