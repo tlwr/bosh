@@ -67,6 +67,10 @@ module Bosh::Director
       expect(handler).to be_kind_of(described_class)
     end
 
+    it 'is an instance problem' do
+      expect(handler.instance_problem?).to be_truthy
+    end
+
     it 'should call recreate_vm_skip_post_start when set to auto' do
       allow(handler).to receive(:recreate_vm_skip_post_start)
       expect(handler).to receive(:recreate_vm_skip_post_start).with(instance)
