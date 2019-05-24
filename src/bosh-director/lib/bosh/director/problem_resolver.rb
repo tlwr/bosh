@@ -40,20 +40,10 @@ module Bosh::Director
 
       if Config.parallel_problem_resolution && problems.size > 1
         ig_to_problems = problems_by_instance_group(problems)
-        problems_serially_ordered_by_job(ig_to_problems) do |probs, max_in_flight, serial|
+        problems_serially_ordered_by_job(ig_to_problems) do |probs, max_in_flight|
           n_threads = [probs.size, max_in_flight, Config.max_threads].min
-          if !serial && n_threads > 1
-            ThreadPool.new(max_threads: n_threads).wrap do |pool|
-              probs.each do |problem|
-                pool.process do
-                  process_problem(problem)
-                end
-              end
-            end
-          else
-            probs.each do |problem|
-              process_problem(problem)
-            end
+          parallel_each(n_threads, problems) do |problem|
+            process_problem(problem)
           end
         end
       else
@@ -69,6 +59,22 @@ module Bosh::Director
 
     private
 
+    def parallel_each(n_threads, ary)
+      if n_threads > 1
+        ThreadPool.new(max_threads: n_threads).wrap do |pool|
+          ary.each do |entry|
+            pool.process do
+              yield entry
+            end
+          end
+        end
+      else
+        ary.each do |entry|
+          yield entry
+        end
+      end
+    end
+
     def process_problem(problem)
       if problem.open?
         apply_resolution(problem)
@@ -82,22 +88,8 @@ module Bosh::Director
         igs_with_problems = []
         jp.each { |ig| igs_with_problems << ig.name if ig_to_problems.key?(ig.name) }
         n_threads = [igs_with_problems.size, Config.max_threads].min
-        if jp.first.update.serial? || n_threads < 2
-          # all instance groups in this partition are serial
-          jp.each do |ig|
-            process_ig(ig.name, ig_to_problems[ig.name], block)
-          end
-        else
-          # all instance groups in this partition are non-serial
-          # therefore, parallelize recreation of all instances in this partition
-          # therefore, create an outer ThreadPool as ParallelMultiInstanceGroupUpdater does it in the regular deploy flow
-          ThreadPool.new(max_threads: n_threads).wrap do |pool|
-            igs_with_problems.each do |ig|
-              pool.process do
-                process_ig(ig, ig_to_problems[ig], block)
-              end
-            end
-          end
+        parallel_each(jp.first.update.serial? ? 1 : n_threads, igs_with_problems) do |ig_name|
+          process_ig(ig_name, ig_to_problems[ig_name], block)
         end
       end
     end
@@ -107,27 +99,23 @@ module Bosh::Director
         plan_ig.name == ig_name
       end
       max_in_flight = instance_group.update.max_in_flight(problems.size)
-      serial = instance_group.update.serial?
-      # within an instance_group parallelize recreation of all instances
-      block.call(problems, max_in_flight, serial)
+      block.call(problems, max_in_flight)
     end
 
     def problems_by_instance_group(problems)
       instance_group_to_problems = {}
       problems.each do |p|
         begin
-          instance_problem = p.instance_problem?
+          if p.instance_problem?
+            instance = Models::Instance.where(id: p.resource_id).first
+          else
+            disk = Models::PersistentDisk.where(id: p.resource_id).first
+            instance = Models::Instance.where(id: disk.instance_id).first if disk
+          end
+          (instance_group_to_problems[instance.job] ||= []) << p if instance
         rescue StandardError => e
           log_resolution_error(p, e)
-          next
         end
-        if instance_problem
-          instance = Models::Instance.where(id: p.resource_id).first
-        else
-          disk = Models::PersistentDisk.where(id: p.resource_id).first
-          instance = Models::Instance.where(id: disk.instance_id).first if disk
-        end
-        (instance_group_to_problems[instance.job] ||= []) << p if instance
       end
       instance_group_to_problems
     end

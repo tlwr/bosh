@@ -116,15 +116,8 @@ module Bosh::Director
           context 'when the number instances with problems is smaller than max_in_flight and max_threads' do
             it 'respects number of instances with problems' do
               test_instance_apply_resolutions
-              n_outer_threadpool_called = 1
-              n_inner_threadpool_called = 4
-
-              expect(ThreadPool).to have_received(:new).exactly(
-                n_outer_threadpool_called,
-              ).times.with(max_threads: n_igs_with_problems)
-              expect(ThreadPool).to have_received(:new).exactly(
-                n_inner_threadpool_called,
-              ).times.with(max_threads: n_problems_in_ig)
+              expect(ThreadPool).to have_received(:new).once.with(max_threads: n_igs_with_problems)
+              expect(ThreadPool).to have_received(:new).exactly(n_igs_with_problems).times.with(max_threads: n_problems_in_ig)
             end
           end
 
@@ -133,15 +126,8 @@ module Bosh::Director
 
             it 'respects max_in_flight' do
               test_instance_apply_resolutions
-              n_outer_threadpool_called = 1
-              n_inner_threadpool_called = 4
-
-              expect(ThreadPool).to have_received(:new).exactly(
-                n_outer_threadpool_called,
-              ).times.with(max_threads: n_igs_with_problems)
-              expect(ThreadPool).to have_received(:new).exactly(
-                n_inner_threadpool_called,
-              ).times.with(max_threads: max_in_flight)
+              expect(ThreadPool).to have_received(:new).once.with(max_threads: n_igs_with_problems)
+              expect(ThreadPool).to have_received(:new).exactly(n_igs_with_problems).times.with(max_threads: max_in_flight)
             end
           end
 
@@ -149,12 +135,7 @@ module Bosh::Director
             let(:max_threads) { 2 }
             it 'respects max_threads' do
               test_instance_apply_resolutions
-              n_outer_threadpool_called = 1
-              n_inner_threadpool_called = 4
-
-              expect(ThreadPool).to have_received(:new).exactly(
-                n_outer_threadpool_called + n_inner_threadpool_called,
-              ).times.with(max_threads: max_threads)
+              expect(ThreadPool).to have_received(:new).exactly(1 + n_igs_with_problems).times.with(max_threads: max_threads)
             end
           end
 
@@ -174,11 +155,11 @@ module Bosh::Director
 
             it 'respects serial' do
               test_instance_apply_resolutions
-              n_outer_threadpool_called = 1
-              n_inner_threadpool_called = 2
-
-              expect(ThreadPool).to have_received(:new).exactly(n_outer_threadpool_called).times.with(max_threads: 2)
-              expect(ThreadPool).to have_received(:new).exactly(n_inner_threadpool_called).times.with(max_threads: 3)
+              non_serial_igs_with_problems = 2
+              expect(ThreadPool).to have_received(:new).once.with(max_threads: non_serial_igs_with_problems)
+              expect(ThreadPool).to have_received(:new).exactly(
+                n_igs_with_problems,
+              ).times.with(max_threads: n_problems_in_ig)
             end
           end
         end
