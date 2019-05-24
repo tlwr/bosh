@@ -14,6 +14,9 @@ gnatsd/gnatsd-1.3.0-bosh.2-linux-amd64:
   size: 10471093
   object_id: cbc9d252-ca0c-4120-6f36-1a6e856b1f03
   sha: add5c727ae5853d41f5eb1d880bfbb26245588aa
+gnatsd/gnatsd-2.0.0.rc14-linux-amd64:
+  size: 9104704
+  sha: sha256:093f698792d31c5b5149b9668de13f5740557eed919bc21e32d919ec9a4df8fa
 mysql/mariadb-connector-c-3.0.3-src.tar.gz:
   size: 666928
   object_id: 0d20e9e3-1a7d-4872-6ea3-28246c579ca8

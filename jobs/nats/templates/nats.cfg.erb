@@ -36,10 +36,10 @@ authorization {
     ]
   }
 
-  certificate_clients: [
-    {client_name: director.bosh-internal, permissions: $DIRECTOR_PERMISSIONS},
-    {client_name: agent.bosh-internal, permissions: $AGENT_PERMISSIONS},
-    {client_name: hm.bosh-internal, permissions: $HM_PERMISSIONS},
+  users [
+    {user: director.bosh-internal, permissions: $DIRECTOR_PERMISSIONS},
+    {user: agent.bosh-internal, permissions: $AGENT_PERMISSIONS},
+    {user: hm.bosh-internal, permissions: $HM_PERMISSIONS},
   ]
 
   timeout: <%= p('nats.auth_timeout') %>
@@ -51,7 +51,6 @@ tls {
   ca_file:    "/var/vcap/jobs/nats/config/nats_client_ca.pem"
   verify:     true
   timeout:    <%= p('nats.tls.timeout') %>
-  enable_cert_authorization: true
 }
 
 ping_interval: <%= p('nats.ping_interval') %>
