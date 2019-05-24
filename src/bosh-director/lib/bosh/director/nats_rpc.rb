@@ -1,5 +1,4 @@
-module Bosh::Director
-  # Remote procedure call client wrapping NATS
+module Bosh::Director  # Remote procedure call client wrapping NATS
   class NatsRpc
 
     MAX_RECONNECT_ATTEMPTS = 4
@@ -13,8 +12,11 @@ module Bosh::Director
       @logger = Config.logger
       @lock = Mutex.new
       @inbox_name = "director.#{Config.process_uuid}"
+      @requests_pending = {}
       @requests = {}
       @handled_response = false
+      @real_requests_count = 0
+      @real_publish_count = 0
     end
 
     # Returns a lazily connected NATS client
@@ -29,10 +31,15 @@ module Bosh::Director
     # Publishes a payload (encoded as JSON) without expecting a response
     def send_message(client, payload)
       message = JSON.generate(payload)
-      @logger.debug("SENT: #{client} #{message}")
+      @logger.debug("SENT: #{client} #{payload[:method]} #{payload["reply_to"]} #{@real_publish_count}")
 
       EM.schedule do
-        nats.publish(client, message)
+        @logger.debug("EM_SCHEDULE_NATS_PUBLISH: #{client} #{payload[:method]} #{payload["reply_to"]} #{@real_publish_count}")
+        @lock.synchronize { @real_publish_count += 1 }
+        nats.publish(client, message) do
+          puts "###nats done: No-reply-send: #{client} #{payload[:method]} #{payload["reply_to"]} msg processed!"
+          @lock.synchronize { @real_publish_count -= 1 }
+        end
       end
     end
 
@@ -44,18 +51,35 @@ module Bosh::Director
         @requests[request_id] = [callback, options]
       end
 
-      sanitized_log_message = sanitize_log_message(request)
+      @lock.synchronize { @real_requests_count += 1 }
+
+      #sanitized_log_message = sanitize_log_message(request)
       request_body = JSON.generate(request)
 
-      @logger.debug("SENT: #{subject_name} #{sanitized_log_message}") unless options['logging'] == false
+      @lock.synchronize do
+        @requests_pending[request_id] = { subject_name: subject_name, request_body: request_body, request: request }
+      end
+
+      @logger.debug("SENT: #{subject_name},\"method\":\"#{request[:method]}\",\"reply_to\": \"#{request["reply_to"]}\" #{@real_requests_count} #{@real_publish_count}")
 
       EM.schedule do
+        @logger.debug("EM_SCHEDULE: #{subject_name} #{request[:method]} #{request["reply_to"]} #{@real_publish_count}")
         subscribe_inbox
         if @handled_response
-          nats.publish(subject_name, request_body)
+          @logger.debug("EM_SCHEDULE_NATS_PUBLISH: #{subject_name} #{request[:method]} #{request["reply_to"]} #{@real_publish_count}")
+          @lock.synchronize { @real_publish_count += 1 }
+          nats.publish(subject_name, request_body) do
+            puts "###nats done: Reply-send: #{subject_name} #{request[:method]} #{request["reply_to"]} msg processed!"
+            @lock.synchronize { @real_publish_count -= 1 }
+          end
         else
           nats.flush do
-            nats.publish(subject_name, request_body)
+            @logger.debug("EM_SCHEDULE_NATS_PUBLISH: #{subject_name} #{request[:method]} #{request["reply_to"]} #{@real_publish_count}")
+            @lock.synchronize { @real_publish_count += 1 }
+            nats.publish(subject_name, request_body) do
+              puts "###nats done: Subject: #{subject_name} #{request[:method]} #{request["reply_to"]} msg processed!"
+              @lock.synchronize { @real_publish_count -= 1 }
+            end
           end
         end
       end
@@ -64,7 +88,10 @@ module Bosh::Director
 
     # Stops listening for a response
     def cancel_request(request_id)
-      @lock.synchronize { @requests.delete(request_id) }
+      @lock.synchronize do
+        @requests.delete(request_id)
+        @requests_pending.delete(request_id)
+      end
     end
 
     def generate_request_id
@@ -82,6 +109,17 @@ module Bosh::Director
               password = @nats_uri[/nats:\/\/.*:(.*)@/, 1]
               redacted_message = password.nil? ? "NATS client error: #{e}" : "NATS client error: #{e}".gsub(password, '*******')
               @logger.error(redacted_message)
+
+              # @logger.debug("$$Retrying to send requests")
+              # EM.schedule do
+              #   subscribe_inbox
+              #   @requests_pending.each do |_,r|
+              #     @logger.debug("$$ON_ERROR EM_SCHEDULE_NATS_PUBLISH: #{r[:subject_name]} #{r[:request][:method]} #{r[:request]["reply_to"]}")
+              #     nats.publish(r[:subject_name], r[:request_body]) do
+              #       puts "$$ON_ERROR ###nats done: Reply-send: #{r[:subject_name]} #{r[:request][:method]} #{r[:request]["reply_to"]} msg processed!"
+              #     end
+              #   end
+              # end
             end
             options = {
               # The NATS client library has a built-in reconnection logic.
@@ -131,7 +169,11 @@ module Bosh::Director
       begin
         request_id = subject.split(".").last
         callback, options = @lock.synchronize { @requests.delete(request_id) }
-        @logger.debug("RECEIVED: #{subject} #{message}") if (options && options['logging'])
+        @lock.synchronize do
+          @real_requests_count -= 1
+          @requests_pending.delete(request_id)
+        end
+        @logger.debug("RECEIVED: #{subject} #{message} #{@real_requests_count}")
         if callback
           message = message.empty? ? nil : JSON.parse(message)
           callback.call(message)
