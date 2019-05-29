@@ -84,18 +84,29 @@ module Bosh::Director
       end
 
       def parse_release
-        release_name = safe_property(@instance_group_spec, 'release', class: String, optional: true)
-
-        if release_name.nil?
-          @instance_group.release = @deployment.releases.first if @deployment.releases.size == 1
-        else
-          @instance_group.release = @deployment.release(release_name)
-
-          if @instance_group.release.nil?
-            raise InstanceGroupUnknownRelease,
-                  "Instance group '#{@instance_group.name}' references an unknown release '#{release_name}'"
-          end
+        if @deployment.releases.size == 1
+          @instance_group.release = @deployment.releases.first
+          return
         end
+
+        # should we match the deployment release if there's only one release?
+        if @deployment.releases.size == 1
+          @instance_group.release = @deployment.releases.first
+        end
+
+        # release_name = safe_property(@instance_group_spec, 'release', class: String, optional: true)
+        #
+        # if release_name.nil?
+        #   @instance_group.release = @deployment.releases.first if @deployment.releases.size == 1
+        # else
+        #
+        #   @instance_group.release = @deployment.release(release_name)
+        #
+        #   if @instance_group.release.nil?
+        #     raise InstanceGroupUnknownRelease,
+        #           "Instance group '#{@instance_group.name}' references an unknown release '#{release_name}'"
+        #   end
+        # end
       end
 
       def parse_jobs(merged_global_and_instance_group_properties, is_deploy_action)

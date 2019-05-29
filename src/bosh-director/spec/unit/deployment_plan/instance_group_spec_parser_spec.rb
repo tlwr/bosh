@@ -74,7 +74,7 @@ module Bosh::Director
           {
             'name' => 'instance-group-name',
             'jobs' => [],
-            'release' => 'fake-release-name',
+            # 'release' => 'fake-release-name',
             'vm_type' => 'fake-vm-type',
             'stemcell' => 'fake-stemcell',
             'env' => { 'key' => 'value' },
@@ -142,7 +142,17 @@ module Bosh::Director
             )
           end
 
-          context 'when there is no job-level release defined' do
+          context 'when there is an instance-group release defined' do
+            it 'ignores the instance-group defined release and defaults to the job release when present' do
+              deployment_release = instance_double(ReleaseVersion, name: '')
+              allow(deployment_plan).to receive(:releases).and_return([deployment_release])
+
+              instance_group = parsed_instance_group
+              expect(instance_group.release).to eq(deployment_release)
+            end
+          end
+
+          context 'when there is no instance_group-level release defined' do
             before { instance_group_spec.delete('release') }
 
             context 'when the deployment has zero releases'
