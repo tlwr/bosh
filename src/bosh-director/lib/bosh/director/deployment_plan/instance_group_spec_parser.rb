@@ -26,9 +26,9 @@ module Bosh::Director
         parse_name
         parse_lifecycle
 
-        parse_release
         validate_jobs
 
+        # what
         merged_global_and_instance_group_properties = extract_global_and_instance_group_properties
 
         parse_jobs(merged_global_and_instance_group_properties, options['is_deploy_action'])
@@ -83,124 +83,86 @@ module Bosh::Director
         @instance_group.lifecycle = lifecycle
       end
 
-      def parse_release
-        if @deployment.releases.size == 1
-          @instance_group.release = @deployment.releases.first
-          return
-        end
-
-        # should we match the deployment release if there's only one release?
-        if @deployment.releases.size == 1
-          @instance_group.release = @deployment.releases.first
-        end
-
-        # release_name = safe_property(@instance_group_spec, 'release', class: String, optional: true)
-        #
-        # if release_name.nil?
-        #   @instance_group.release = @deployment.releases.first if @deployment.releases.size == 1
-        # else
-        #
-        #   @instance_group.release = @deployment.release(release_name)
-        #
-        #   if @instance_group.release.nil?
-        #     raise InstanceGroupUnknownRelease,
-        #           "Instance group '#{@instance_group.name}' references an unknown release '#{release_name}'"
-        #   end
-        # end
-      end
-
       def parse_jobs(merged_global_and_instance_group_properties, is_deploy_action)
-        jobs = safe_property(@instance_group_spec, 'jobs', class: Array, optional: true)
+        jobs = safe_property(@instance_group_spec, 'jobs', class: Array)
 
         migrated_from = safe_property(@instance_group_spec, 'migrated_from', class: Array, optional: true, default: [])
 
-        if jobs
-          release_manager = Api::ReleaseManager.new
+        release_manager = Api::ReleaseManager.new
 
-          # Key: release name.
-          # Value: list of templates models of release version.
-          release_versions_templates_models_hash = {}
+        # Key: release name.
+        # Value: list of templates models of release version.
+        release_versions_templates_models_hash = {}
 
-          jobs.each do |job_spec|
-            job_name = safe_property(job_spec, 'name', class: String)
-            release_name = safe_property(job_spec, 'release', class: String, optional: true)
+        jobs.each do |job_spec|
+          job_name = safe_property(job_spec, 'name', class: String)
+          release_name = safe_property(job_spec, 'release', class: String)
 
-            if release_name
-              release = @deployment.release(release_name)
-              unless release
-                raise InstanceGroupUnknownRelease,
-                      "Job '#{job_name}' (instance group '#{@instance_group.name}') references an unknown release '#{release_name}'"
-              end
-            else
-              release = @instance_group.release
-              unless release
-                raise InstanceGroupMissingRelease, "Cannot tell what release template '#{job_name}' (instance group '#{@instance_group.name}') is supposed to use, please explicitly specify one"
-              end
-
-              release_name = release.name
-            end
-
-            unless release_versions_templates_models_hash.key?(release_name)
-              release_model = release_manager.find_by_name(release.name)
-              current_release_version = release_manager.find_version(release_model, release.version)
-              release_versions_templates_models_hash[release_name] = current_release_version.templates
-            end
-
-            templates_models_list = release_versions_templates_models_hash[release_name]
-            current_template_model = templates_models_list.find { |target| target.name == job_name }
-
-            job = release.get_or_create_template(job_name)
-
-            raise "Job '#{job_name}' not found in Template table" if current_template_model.nil?
-
-            job_properties = if job_spec.key?('properties')
-                               safe_property(job_spec, 'properties', class: Hash, optional: true, default: {})
-                             else
-                               merged_global_and_instance_group_properties
-                             end
-
-            job.add_properties(
-              job_properties,
-              @instance_group.name,
-            )
-
-            # migrated_from true? or false?
-            # get migrated_from_name = migarted_name : @instance_group.name
-            if is_deploy_action
-              if migrated_from.to_a.empty?
-                @links_parser.parse_providers_from_job(
-                  job_spec,
-                  @deployment.model,
-                  current_template_model,
-                  job_properties: job_properties,
-                  instance_group_name: @instance_group.name,
-                )
-                @links_parser.parse_consumers_from_job(
-                  job_spec,
-                  @deployment.model,
-                  current_template_model,
-                  instance_group_name: @instance_group.name,
-                )
-              else
-                @links_parser.parse_migrated_from_providers_from_job(
-                  job_spec,
-                  @deployment.model,
-                  current_template_model,
-                  job_properties: job_properties,
-                  instance_group_name: @instance_group.name,
-                  migrated_from: migrated_from,
-                )
-                @links_parser.parse_migrated_from_consumers_from_job(
-                  job_spec,
-                  @deployment.model,
-                  current_template_model,
-                  instance_group_name: @instance_group.name,
-                  migrated_from: migrated_from,
-                )
-              end
-            end
-            @instance_group.jobs << job
+          release = @deployment.release(release_name)
+          unless release
+            raise InstanceGroupUnknownRelease,
+                  "Job '#{job_name}' (instance group '#{@instance_group.name}') references an unknown release '#{release_name}'"
           end
+
+          release_model = release_manager.find_by_name(release.name)
+          current_release_version = release_manager.find_version(release_model, release.version)
+          release_versions_templates_models_hash[release_name] = current_release_version.templates
+
+          current_template_model = current_release_version.templates.find { |target| target.name == job_name }
+
+          job = release.get_or_create_template(job_name)
+
+          # TODO: Make it a real typed exception
+          raise "Job '#{job_name}' not found in Template table" if current_template_model.nil?
+
+          job_properties = if job_spec.key?('properties')
+                             safe_property(job_spec, 'properties', class: Hash, optional: true, default: {})
+                           else
+                             merged_global_and_instance_group_properties
+                           end
+
+          job.add_properties(
+            job_properties,
+            @instance_group.name,
+          )
+
+          # migrated_from true? or false?
+          # get migrated_from_name = migarted_name : @instance_group.name
+          if is_deploy_action
+            if migrated_from.to_a.empty?
+              @links_parser.parse_providers_from_job(
+                job_spec,
+                @deployment.model,
+                current_template_model,
+                job_properties: job_properties,
+                instance_group_name: @instance_group.name,
+              )
+              @links_parser.parse_consumers_from_job(
+                job_spec,
+                @deployment.model,
+                current_template_model,
+                instance_group_name: @instance_group.name,
+              )
+            else
+              @links_parser.parse_migrated_from_providers_from_job(
+                job_spec,
+                @deployment.model,
+                current_template_model,
+                job_properties: job_properties,
+                instance_group_name: @instance_group.name,
+                migrated_from: migrated_from,
+              )
+              @links_parser.parse_migrated_from_consumers_from_job(
+                job_spec,
+                @deployment.model,
+                current_template_model,
+                instance_group_name: @instance_group.name,
+                migrated_from: migrated_from,
+              )
+            end
+          end
+          @instance_group.jobs << job
+
         end
       end
 
@@ -413,6 +375,7 @@ module Bosh::Director
       def validate_jobs
         template_property = safe_property(@instance_group_spec, 'template', optional: true)
         templates_property = safe_property(@instance_group_spec, 'templates', optional: true)
+        #Make this non-options and remove 388, maybe just return jobs
         jobs_property = safe_property(@instance_group_spec, 'jobs', optional: true)
 
         if template_property || templates_property
