@@ -248,27 +248,30 @@ module Bosh::Director
               end
 
               it 'uses the correct release for each job' do
+                instance_group_spec['name'] = 'instance-group-name'
+
                 rel_ver1 = instance_double(ReleaseVersion, name: 'release1', version: '1')
-
-
                 job1 = make_job('job1', rel_ver1)
                 allow(job1).to receive(:add_properties)
+                allow(deployment_plan).to receive(:release)
+                  .with('release1')
+                  .and_return(rel_ver1)
 
                 expect(rel_ver1).to receive(:get_or_create_template)
-                                      .with('job-name1')
-                                      .and_return(job1)
+                  .with('job-name1')
+                  .and_return(job1)
 
                 rel_ver2 = instance_double(ReleaseVersion, name: 'release2', version: '1')
-
-
                 job2 = make_job('job2', rel_ver2)
                 allow(job2).to receive(:add_properties)
+                allow(deployment_plan).to receive(:release)
+                  .with('release2')
+                  .and_return(rel_ver2)
 
                 expect(rel_ver2).to receive(:get_or_create_template)
-                                      .with('job-name2')
-                                      .and_return(job2)
+                  .with('job-name2')
+                  .and_return(job2)
 
-                instance_group_spec['name'] = 'instance-group-name'
                 parsed_instance_group
               end
             end
