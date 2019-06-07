@@ -361,6 +361,8 @@ module Bosh::Director
 
         raise ValidationMissingField, "Deployment manifest must have a 'name' key" unless manifest_hash['name']
 
+        manifest_hash = sanitize_ignored_attributes(manifest_hash)
+
         deployment_name = manifest_hash['name']
 
         options = {}
@@ -567,6 +569,15 @@ module Bosh::Director
         # For dynamic networks
         result = vm.network_spec.map { |_, network| network['ip'] } if result.empty? && !vm.network_spec.empty?
         result
+      end
+
+      def sanitize_ignored_attributes(manifest_hash)
+        # delete 'instance_group > state' if supplied in a deploy or update manifest
+        manifest_hash['instance_groups']&.each do |instance_group|
+          instance_group.tap { |ig| ig.delete('state') }
+        end
+
+        manifest_hash
       end
     end
   end
