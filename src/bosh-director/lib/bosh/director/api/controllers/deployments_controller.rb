@@ -117,6 +117,26 @@ module Bosh::Director
         redirect "/tasks/#{task.id}"
       end
 
+      post '/:deployment/jobs/:job/:index_or_id/actions/:action' do
+        validate_instance_index_or_id(params[:index_or_id])
+
+        instance = @instance_manager.find_by_name(deployment, params[:job], params[:index_or_id])
+        options = {} # eventually skip-drain ?
+
+        if params[:action] == 'stop'
+          task = JobQueue.new.enqueue(
+            current_user,
+            Jobs::UpdateInstance,
+            'update instance',
+            [instance.id, options],
+            deployment,
+            @current_context_id,
+          )
+          redirect "/tasks/#{task.id}"
+        end
+      end
+
+
       # GET /deployments/foo/jobs/dea/2/logs
       get '/:deployment/jobs/:job/:index_or_id/logs' do
         job = params[:job] == '*' ? nil : params[:job]
