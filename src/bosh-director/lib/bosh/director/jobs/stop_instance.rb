@@ -1,16 +1,17 @@
 module Bosh::Director
   module Jobs
-    class UpdateInstance < BaseJob
+    class StopInstance < BaseJob
       # include LockHelper
 
       @queue = :normal
 
       def self.job_type
-        :update_instance
+        :stop_instance
       end
 
       def initialize(instance_id, options = {})
         @instance_id = instance_id
+        @options = options
       end
 
       def perform
@@ -20,9 +21,10 @@ module Bosh::Director
         deployment_plan.releases.each(&:bind_model)
 
         instance_group = deployment_plan.instance_groups.find { |ig| ig.name == instance_model.job }
+
         instance_group.jobs.each(&:bind_models)
 
-        instance_plan = construct_instance_plan(instance_model, deployment_plan, instance_group)
+        instance_plan = construct_instance_plan(instance_model, deployment_plan, instance_group, @options)
 
         event_log = Config.event_log
         event_log_stage = event_log.begin_stage("Updating instance #{instance_group.name}")
@@ -33,7 +35,7 @@ module Bosh::Director
 
       private
 
-      def construct_instance_plan(instance_model, deployment_plan, instance_group)
+      def construct_instance_plan(instance_model, deployment_plan, instance_group, options)
         desired_instance = DeploymentPlan::DesiredInstance.new(instance_group, deployment_plan)
         variables_interpolator = ConfigServer::VariablesInterpolator.new
 
@@ -56,6 +58,7 @@ module Bosh::Director
           instance: instance,
           variables_interpolator: variables_interpolator,
           network_plans: network_plans,
+          skip_drain: options['skip_drain'],
         )
       end
     end

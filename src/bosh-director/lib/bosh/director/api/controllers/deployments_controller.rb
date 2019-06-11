@@ -121,12 +121,12 @@ module Bosh::Director
         validate_instance_index_or_id(params[:index_or_id])
 
         instance = @instance_manager.find_by_name(deployment, params[:job], params[:index_or_id])
-        options = {} # eventually skip-drain ?
+        options = { skip_drain: params['skip_drain'] == 'true' } # eventually skip-drain ?
 
         if params[:action] == 'stop'
           task = JobQueue.new.enqueue(
             current_user,
-            Jobs::UpdateInstance,
+            Jobs::StopInstance,
             'update instance',
             [instance.id, options],
             deployment,

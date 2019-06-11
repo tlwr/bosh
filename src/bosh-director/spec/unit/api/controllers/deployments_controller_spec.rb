@@ -401,6 +401,20 @@ module Bosh::Director
           end
         end
 
+        describe 'stopping an instance' do
+          let!(:deployment) { Models::Deployment.create(:name => 'test-deployment', :manifest => YAML.dump({'foo' => 'bar'})) }
+          let!(:instance) { Models::Instance.make(deployment: deployment, job: 'dea', index: '2') }
+
+          context 'without the "skip_drain" param' do
+            it 'does not skip draining' do
+              allow(DeploymentPlan::InstancePlan).to receive(:new).and_call_original
+              post '/test-deployment/jobs/dea/2/actions/stop'
+              expect(last_response).to be_redirect
+              expect(DeploymentPlan::InstancePlan).to have_received(:new).with(hash_including(skip_drain: false))
+            end
+          end
+        end
+
         describe 'deleting deployment' do
           it 'deletes the deployment' do
             deployment = Models::Deployment.create(:name => 'test_deployment', :manifest => YAML.dump({'foo' => 'bar'}))
