@@ -21,7 +21,7 @@ module Bosh::Director
       instance_double(DeploymentPlan::Instance,
                       template_hashes: nil,
                       rendered_templates_archive: nil,
-                      configuration_hash: nil
+                      configuration_hash: nil,
       )
     end
 
@@ -62,17 +62,32 @@ module Bosh::Director
 
         job.perform
 
-        pre_stop_env = {'env' => {
+        pre_stop_env = { 'env' => {
           'BOSH_VM_NEXT_STATE' => 'keep',
           'BOSH_INSTANCE_NEXT_STATE' => 'keep',
           'BOSH_DEPLOYMENT_NEXT_STATE' => 'keep',
-        }}
+        } }
 
         expect(agent_client).to have_received(:run_script).with('pre-stop', pre_stop_env)
         expect(agent_client).to have_received(:drain).with('shutdown', anything)
         expect(agent_client).to have_received(:stop)
         expect(agent_client).to have_received(:run_script).with('post-stop', {})
-        expect(instance.state).to eq 'stopped'
+        expect(instance.reload.state).to eq 'stopped'
+      end
+
+      context 'skip-drain' do
+        it 'skips drain' do
+          job = Jobs::StopInstance.new(instance.id, 'skip_drain' => true)
+          expect(instance.state).to eq 'started'
+
+          job.perform
+
+          expect(agent_client).not_to have_received(:run_script).with('pre-stop', anything)
+          expect(agent_client).not_to have_received(:drain)
+          expect(agent_client).to have_received(:stop)
+          expect(agent_client).to have_received(:run_script).with('post-stop', {})
+          expect(instance.reload.state).to eq 'stopped'
+        end
       end
     end
   end
