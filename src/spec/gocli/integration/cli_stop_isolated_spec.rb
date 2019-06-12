@@ -87,6 +87,23 @@ describe 'stop command', type: :integration do
       end
     end
 
+    it 'maintains instance state across a deploy' do
+      curl_with_redirect('-X POST /deployments/simple/jobs/foobar/0/actions/stop')
+      expect(vm_states).to eq(
+                             'another-job/0' => 'running',
+                             'foobar/0' => 'stopped',
+                             'foobar/1' => 'running',
+                             'foobar/2' => 'running',
+                             )
+      deploy(manifest_hash: manifest_hash)
+      expect(vm_states).to eq(
+                             'another-job/0' => 'running',
+                             'foobar/0' => 'stopped',
+                             'foobar/1' => 'running',
+                             'foobar/2' => 'running',
+                             )
+    end
+
     context 'when there are unrelated instances that are not converged' do
       let(:late_fail_manifest) do
         manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups

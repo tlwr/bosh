@@ -30,6 +30,7 @@ module Bosh::Director
         event_log_stage = event_log.begin_stage("Updating instance #{instance_group.name}")
         event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
           Stopper.new(instance_plan, instance_model.state, Config, Config.logger).stop(:keep_vm)
+          instance_model.update(state: 'stopped')
         end
       end
 
