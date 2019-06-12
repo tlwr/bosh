@@ -177,12 +177,15 @@ describe 'stop command', type: :integration do
       end
     end
 
-    xcontext 'given the --hard flag' do
+    context 'given the --hard flag' do
       it 'deletes the VM(s)' do
         expect do
-          output = bosh_runner.run('stop foobar/0 --hard', deployment_name: 'simple')
+          output = curl_with_redirect('-X POST /deployments/simple/jobs/foobar/0/actions/stop?hard=true')
           expect(output).to match /Updating instance foobar: foobar\/.* \(0\)/
         end.to change { director.vms.count }.by(-1)
+        expect do
+          deploy(manifest_hash: manifest_hash)
+        end.not_to(change { director.vms.count })
       end
     end
   end
@@ -215,14 +218,15 @@ describe 'stop command', type: :integration do
     end
   end
 
-  xdescribe 'hard-stopping a job with persistent disk, followed by a re-deploy' do
+  context 'hard-stopping a job with persistent disk, followed by a re-deploy' do
     before do
       manifest_hash['instance_groups'].first['persistent_disk'] = 1024
+      manifest_hash['instance_groups'].first['instances'] = 1
       deploy_from_scratch(manifest_hash: manifest_hash, cloud_config_hash: Bosh::Spec::NewDeployments.simple_cloud_config)
     end
 
     it 'is successful (regression: #108398600) ' do
-      bosh_runner.run('stop foobar --hard', deployment_name: 'simple')
+      curl_with_redirect('-X POST /deployments/simple/jobs/foobar/0/actions/stop?hard=true')
       expect(vm_states).to eq('another-job/0' => 'running')
       expect do
         deploy_from_scratch(manifest_hash: manifest_hash, cloud_config_hash: Bosh::Spec::NewDeployments.simple_cloud_config)

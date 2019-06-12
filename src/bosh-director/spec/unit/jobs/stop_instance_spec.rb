@@ -17,6 +17,7 @@ module Bosh::Director
     let(:event_log) { EventLog::Log.new(task_writer) }
     let(:cloud_config) { Models::Config.make(:cloud_with_manifest_v2) }
     let(:variables_interpolator) { ConfigServer::VariablesInterpolator.new }
+    let(:disk_manager) { instance_double(DiskManager, update_persistent_disk: nil) }
     let(:deployment_plan_instance) do
       instance_double(DeploymentPlan::Instance,
                       template_hashes: nil,
@@ -51,6 +52,9 @@ module Bosh::Director
 
       allow(Config).to receive(:event_log).and_call_original
       allow(AgentClient).to receive(:with_agent_id).and_return(agent_client)
+      allow(DiskManager).to receive(:new).and_return(disk_manager)
+      allow(Api::SnapshotManager).to receive(:take_snapshot)
+
       instance_spec = DeploymentPlan::InstanceSpec.new(spec, deployment_plan_instance, variables_interpolator)
       allow(DeploymentPlan::InstanceSpec).to receive(:create_from_instance_plan).and_return(instance_spec)
     end
@@ -75,13 +79,26 @@ module Bosh::Director
         expect(instance.reload.state).to eq 'stopped'
       end
 
+      it 'should update the persistent disk when soft stopping' do
+        job = Jobs::StopInstance.new(instance.id, 'hard' => false)
+        expect(instance.state).to eq 'started'
+
+        job.perform
+
+        expect(disk_manager).to have_received(:update_persistent_disk)
+        expect(instance.reload.state).to eq 'stopped'
+      end
+
+      it 'takes a snapshot of the instance' do
+        job = Jobs::StopInstance.new(instance.id, 'hard' => false)
+        job.perform
+        expect(Api::SnapshotManager).to have_received(:take_snapshot).with(instance, clean: true)
+      end
+
       context 'skip-drain' do
         it 'skips drain' do
           job = Jobs::StopInstance.new(instance.id, 'skip_drain' => true)
-          expect(instance.state).to eq 'started'
-
           job.perform
-
           expect(agent_client).not_to have_received(:run_script).with('pre-stop', anything)
           expect(agent_client).not_to have_received(:drain)
           expect(agent_client).to have_received(:stop)
