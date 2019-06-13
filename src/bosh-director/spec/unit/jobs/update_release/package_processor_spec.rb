@@ -33,7 +33,7 @@ module Bosh::Director
 
           let(:release_version_model) { instance_double(Models::ReleaseVersion) }
 
-          let(:name)    { 'release-name' }
+          let(:name) { 'release-name' }
           let(:version) { 'release-version' }
 
           before do
@@ -69,30 +69,8 @@ module Bosh::Director
           it 'treats it as a new package' do
             new_packages, existing_packages, registered_packages = process_packages
             expect(existing_packages).to eq([])
-            expect(new_packages).to eq([new_package_metadata.merge('compiled_package_sha1' => new_package_metadata['sha1'])],)
+            expect(new_packages).to eq([new_package_metadata.merge('compiled_package_sha1' => new_package_metadata['sha1'])])
             expect(registered_packages).to eq([])
-          end
-
-          context 'if it is compiled' do
-            let(:compiled_release) { true }
-
-            it 'creates compiled packages' do
-              expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-              expect(update_release).to receive(:create_compiled_packages).with(create_compiled_packages_response, release_dir)
-
-              process_packages
-            end
-          end
-
-          context 'if it is not compiled' do
-            let(:compiled_release) { false }
-
-            it 'backfills source for packages, ignoring the new package' do
-              expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-              expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-
-              process_packages
-            end
           end
         end
 
@@ -143,9 +121,11 @@ module Bosh::Director
                   new_packages, existing_packages, registered_packages = process_packages
                   expect(new_packages).to eq([])
                   expect(existing_packages).to eq([[
-                    package_model,
-                    new_package_metadata.merge('compiled_package_sha1' => new_package_metadata['sha1']),
-                  ]])
+                                                    package_model,
+                                                    new_package_metadata.merge(
+                                                      'compiled_package_sha1' => new_package_metadata['sha1'],
+                                                    ),
+                                                  ]])
                   expect(registered_packages).to eq([])
                 end
               end
@@ -163,24 +143,22 @@ module Bosh::Director
                     version: package_version,
                     blobstore_id: another_blobstore_id,
                     dependency_set_json: '{}',
-                    release_id: release.id+1,
+                    release_id: release.id + 1,
                   )
 
-                  expect(update_release).to receive(:create_packages).with([], release_dir)
-                  expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-                  expect(update_release).to receive(:use_existing_packages).with(
-                    [[
-                      package_model,
-                      new_package_metadata.merge(
-                        'compiled_package_sha1' => new_package_metadata['sha1'],
-                        'blobstore_id' => another_blobstore_id,
-                        'sha1' => another_model_sha1,
-                      ),
-                    ]],
-                    release_dir,
-                  )
+                  new_package_sha1 = new_package_metadata['sha1']
 
-                  process_packages
+                  new_packages, existing_packages, registered_packages = process_packages
+                  expect(new_packages).to eq([])
+                  expect(existing_packages).to eq([[
+                                                    package_model,
+                                                    new_package_metadata.merge(
+                                                      'compiled_package_sha1' => new_package_sha1,
+                                                      'blobstore_id' => another_blobstore_id,
+                                                      'sha1' => another_model_sha1,
+                                                    ),
+                                                  ]])
+                  expect(registered_packages).to eq([])
                 end
               end
             end
@@ -190,59 +168,37 @@ module Bosh::Director
                 release_version_model.add_package(package_model)
               end
 
-              context 'and is compiled' do
-                let(:compiled_release) { true }
-
-                it 'reshapes the existing packages to input into create_compiled_packages' do
-                  expect(update_release).to receive(:create_packages).with([], release_dir)
-                  expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                  expect(update_release).to receive(:create_compiled_packages).with(
-                    [{
-                      package: package_model,
-                      package_meta: new_package_metadata,
-                    }],
-                    release_dir,
-                  )
-
-                  process_packages
-                end
-              end
-
-              context 'and is not compiled' do
-                let(:compiled_release) { false }
-
-                it 'backfills source for packages' do
-                  expect(update_release).to receive(:create_packages).with([], release_dir)
-                  expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                  expect(update_release).to receive(:backfill_source_for_packages).with(
-                    [[
-                      package_model,
-                      new_package_metadata.merge('compiled_package_sha1' => new_package_metadata['sha1']),
-                    ]],
-                    release_dir,
-                  )
-
-                  process_packages
-                end
+              it 'includes it as a registered package and not an existing one' do
+                new_packages, existing_packages, registered_packages = process_packages
+                expect(new_packages).to eq([])
+                expect(existing_packages).to eq([])
+                expect(registered_packages).to eq([[
+                                                    package_model,
+                                                    new_package_metadata,
+                                                  ]])
               end
             end
           end
 
           context 'and is not preexisting' do
             context 'and has a nil blobstore id' do
-              let(:release_model) { double(id: release.id+1) }
+              let(:release_model) { double(id: release.id + 1) }
 
               let(:blobstore_id) { nil }
 
               it 'does not reuse the blob' do
-                expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-                expect(update_release).to receive(:create_packages).with(
-                  [hash_excluding('blobstore_id' => blobstore_id, 'sha1' => model_sha)],
-                  release_dir,
-                )
+                new_packages, existing_packages, registered_packages = process_packages
 
-                process_packages
+                new_package_sha1 = new_package_metadata['sha1']
+
+                expect(new_packages).to eq([
+                                             new_package_metadata.merge(
+                                               'compiled_package_sha1' => new_package_sha1,
+                                               'sha1' => new_package_sha1,
+                                             ).except('blobstore_id'),
+                                           ])
+                expect(existing_packages).to eq([])
+                expect(registered_packages).to eq([])
               end
             end
 
@@ -250,24 +206,21 @@ module Bosh::Director
               let(:blobstore_id) { '1234' }
 
               context 'but does not match release id' do
-
-                let(:release_model) { double(id: release.id+1) }
+                let(:release_model) { double(id: release.id + 1) }
 
                 it 'copies metadata from the existing package' do
-                  expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                  expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-                  expect(update_release).to receive(:create_packages).with(
-                    [
-                      new_package_metadata.merge(
-                        'compiled_package_sha1' => new_package_metadata['sha1'],
-                        'blobstore_id' => blobstore_id,
-                        'sha1' => model_sha,
-                      ),
-                    ],
-                    release_dir,
-                  )
+                  new_package_sha1 = new_package_metadata['sha1']
 
-                  process_packages
+                  new_packages, existing_packages, registered_packages = process_packages
+                  expect(new_packages).to eq([
+                                               new_package_metadata.merge(
+                                                 'compiled_package_sha1' => new_package_sha1,
+                                                 'blobstore_id' => blobstore_id,
+                                                 'sha1' => model_sha,
+                                               ),
+                                             ])
+                  expect(existing_packages).to eq([])
+                  expect(registered_packages).to eq([])
                 end
               end
 
@@ -275,20 +228,18 @@ module Bosh::Director
                 let(:package_name) { 'package-b' }
 
                 it 'copies metadata from the existing package' do
-                  expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                  expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-                  expect(update_release).to receive(:create_packages).with(
-                    [
-                      new_package_metadata.merge(
-                        'compiled_package_sha1' => new_package_metadata['sha1'],
-                        'blobstore_id' => blobstore_id,
-                        'sha1' => model_sha,
-                      ),
-                    ],
-                    release_dir,
-                  )
+                  new_package_sha1 = new_package_metadata['sha1']
 
-                  process_packages
+                  new_packages, existing_packages, registered_packages = process_packages
+                  expect(new_packages).to eq([
+                                               new_package_metadata.merge(
+                                                 'compiled_package_sha1' => new_package_sha1,
+                                                 'blobstore_id' => blobstore_id,
+                                                 'sha1' => model_sha,
+                                               ),
+                                             ])
+                  expect(existing_packages).to eq([])
+                  expect(registered_packages).to eq([])
                 end
               end
 
@@ -296,20 +247,18 @@ module Bosh::Director
                 let(:package_version) { 'package-version-abcd' }
 
                 it 'copies metadata from the existing package' do
-                  expect(update_release).to receive(:use_existing_packages).with([], release_dir)
-                  expect(update_release).to receive(:backfill_source_for_packages).with([], release_dir)
-                  expect(update_release).to receive(:create_packages).with(
-                    [
-                      new_package_metadata.merge(
-                        'compiled_package_sha1' => new_package_metadata['sha1'],
-                        'blobstore_id' => blobstore_id,
-                        'sha1' => model_sha,
-                      ),
-                    ],
-                    release_dir,
-                  )
+                  new_package_sha1 = new_package_metadata['sha1']
 
-                  process_packages
+                  new_packages, existing_packages, registered_packages = process_packages
+                  expect(new_packages).to eq([
+                                               new_package_metadata.merge(
+                                                 'compiled_package_sha1' => new_package_sha1,
+                                                 'blobstore_id' => blobstore_id,
+                                                 'sha1' => model_sha,
+                                               ),
+                                             ])
+                  expect(existing_packages).to eq([])
+                  expect(registered_packages).to eq([])
                 end
               end
             end
