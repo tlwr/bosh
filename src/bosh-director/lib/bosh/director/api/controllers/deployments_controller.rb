@@ -131,14 +131,13 @@ module Bosh::Director
             current_user,
             Jobs::StopInstance,
             'update instance',
-            [instance.id, options],
+            [deployment.name, instance.id, options],
             deployment,
             @current_context_id,
           )
           redirect "/tasks/#{task.id}"
         end
       end
-
 
       # GET /deployments/foo/jobs/dea/2/logs
       get '/:deployment/jobs/:job/:index_or_id/logs' do
