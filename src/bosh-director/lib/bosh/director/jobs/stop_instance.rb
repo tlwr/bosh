@@ -35,13 +35,13 @@ module Bosh::Director
           instance_plan = construct_instance_plan(instance_model, deployment_plan, instance_group, @options)
 
           event_log = Config.event_log
-          event_log_stage = event_log.begin_stage("Stopping instance #{instance_group.name}/#{@instance_id}")
+          event_log_stage = event_log.begin_stage("Stopping instance #{instance_model.job}")
           event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
             stop(instance_plan, instance_model)
           end
 
-          event_log_stage = event_log.begin_stage("Deleting VM: #{instance_model.vm_cid}")
-          event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
+          event_log_stage = event_log.begin_stage('Deleting VM')
+          event_log_stage.advance_and_track(instance_model.vm_cid) do
             detach_instance(instance_model) if @options['hard']
           end
         end

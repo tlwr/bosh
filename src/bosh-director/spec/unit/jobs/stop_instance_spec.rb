@@ -113,6 +113,12 @@ module Bosh::Director
         expect(Api::SnapshotManager).to have_received(:take_snapshot).with(instance, clean: true)
       end
 
+      it 'obtains a deployment lock' do
+        job = Jobs::StopInstance.new(deployment.name, instance.id, 'hard' => false)
+        expect(job).to receive(:with_deployment_lock).with('simple').and_yield
+        job.perform
+      end
+
       it 'logs stopping and detaching' do
         expect(Config.event_log).to receive(:begin_stage).with('Stopping instance foobar/1').and_return(event_log_stage)
         expect(event_log_stage).to receive(:advance_and_track).with('foobar/test-uuid (1)').and_yield

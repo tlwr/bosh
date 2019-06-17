@@ -130,7 +130,7 @@ module Bosh::Director
           task = JobQueue.new.enqueue(
             current_user,
             Jobs::StopInstance,
-            'update instance',
+            'stop instance',
             [deployment.name, instance.id, options],
             deployment,
             @current_context_id,
