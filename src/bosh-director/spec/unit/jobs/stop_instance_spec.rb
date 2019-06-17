@@ -120,11 +120,11 @@ module Bosh::Director
       end
 
       it 'logs stopping and detaching' do
-        expect(Config.event_log).to receive(:begin_stage).with('Stopping instance foobar/1').and_return(event_log_stage)
+        expect(Config.event_log).to receive(:begin_stage).with('Stopping instance foobar').and_return(event_log_stage)
         expect(event_log_stage).to receive(:advance_and_track).with('foobar/test-uuid (1)').and_yield
 
-        expect(Config.event_log).to receive(:begin_stage).with('Deleting VM: test-vm-cid').and_return(event_log_stage)
-        expect(event_log_stage).to receive(:advance_and_track).with('foobar/test-uuid (1)').and_yield
+        expect(Config.event_log).to receive(:begin_stage).with('Deleting VM').and_return(event_log_stage)
+        expect(event_log_stage).to receive(:advance_and_track).with('test-vm-cid').and_yield
         job = Jobs::StopInstance.new(deployment.name, instance.id, 'hard' => true)
         job.perform
       end
