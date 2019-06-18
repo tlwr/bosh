@@ -28,7 +28,7 @@ module Bosh::Director
       logger.debug("Rendering templates for instance #{instance}")
 
       instance_renderer = Core::Templates::JobInstanceRenderer.new(instance_plan.templates, loader)
-      rendered_job_instance = instance_renderer.render(get_templates_spec(instance_plan))
+      rendered_job_instance = instance_renderer.render(get_templates_spec(instance_plan, logger))
 
       instance_plan.rendered_templates = rendered_job_instance
 
@@ -36,8 +36,8 @@ module Bosh::Director
       instance.template_hashes    = rendered_job_instance.template_hashes
     end
 
-    def self.get_templates_spec(instance_plan)
-      instance_plan.spec.as_template_spec
+    def self.get_templates_spec(instance_plan, logger)
+      instance_plan.spec.as_template_spec(logger)
     rescue StandardError => e
       header = "- Unable to render jobs for instance group '#{instance_plan.instance.instance_group_name}'. Errors are:"
       message = FormatterHelper.new.prepend_header_and_indent_body(

@@ -14,7 +14,7 @@ module Bosh::Director
           if @instance_plan.instance.compilation?
             @logger.debug('Skipping job template rendering, as instance is a compilation instance')
           else
-            @logger.debug("Re-rendering templates with updated dynamic networks: #{@instance_plan.spec.as_template_spec['networks']}")
+            @logger.debug("Re-rendering templates with updated dynamic networks: #{@instance_plan.spec.as_template_spec(@logger)['networks']}")
             JobRenderer.render_job_instances_with_cache(
               @logger,
               [@instance_plan],

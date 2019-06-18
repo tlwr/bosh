@@ -1,3 +1,4 @@
+require 'digest/sha1'
 module Bosh::Director
   module DeploymentPlan
     class InstanceSpec
@@ -51,8 +52,12 @@ module Bosh::Director
         @variables_interpolator = variables_interpolator
       end
 
-      def as_template_spec
-        TemplateSpec.new(full_spec, @variables_interpolator, @instance.desired_variable_set, @instance).spec
+      def as_template_spec(logger)
+        spec = TemplateSpec.new(full_spec, @variables_interpolator, @instance.desired_variable_set, @instance).spec
+        logger.debug("###spec: #{spec.inspect}")
+        sha1sum = Digest::SHA1.hexdigest spec.to_s
+        logger.debug("###sha of spec: #{sha1sum}")
+        spec
       end
 
       def as_apply_spec
