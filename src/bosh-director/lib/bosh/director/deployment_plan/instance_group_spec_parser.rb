@@ -331,21 +331,17 @@ module Bosh::Director
         instances = safe_property(@instance_group_spec, 'instances', class: Integer)
         instance_states = safe_property(@instance_group_spec, 'instance_states', class: Hash, default: {})
 
+        unless instance_states.empty?
+          raise V1DeprecatedInstanceStates,
+                "'instance_states' is not supported as an 'instance_groups' key"
+        end
+
         networks.each do |network|
           static_ips = network.static_ips
           if static_ips && static_ips.size != instances
             raise InstanceGroupNetworkInstanceIpMismatch,
                   "Instance group '#{@instance_group.name}' has #{instances} instances but was allocated #{static_ips.size} static IPs in network '#{network.name}'"
           end
-        end
-
-        instance_states.each_pair do |index_or_id, state|
-          unless InstanceGroup::VALID_STATES.include?(state)
-            raise InstanceGroupInvalidInstanceState,
-                  "Invalid state '#{state}' for '#{@instance_group.name}/#{index_or_id}', valid states are: #{InstanceGroup::VALID_STATES.join(', ')}"
-          end
-
-          @instance_group.instance_states[index_or_id] = state
         end
 
         if @instance_group.state && !InstanceGroup::VALID_STATES.include?(@instance_group.state)
