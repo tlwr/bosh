@@ -1,7 +1,7 @@
 module Bosh::Director
   class Starter
     class << self
-      def start(instance, agent_client, update_config, is_canary = false, run_post_start = false, logger)
+      def start(instance, agent_client, update_config, is_canary = false, run_post_start = false, logger = Config.logger)
         logger.info("Running pre-start for #{instance}")
         agent_client.run_script('pre-start', {})
 

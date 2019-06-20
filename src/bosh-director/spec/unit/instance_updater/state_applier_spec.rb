@@ -146,33 +146,6 @@ module Bosh::Director
     describe 'waiting for job to be running' do
       let(:job_state) { 'stopped' }
 
-      context 'scheduling' do
-        let(:update_watch_time) { '1000-91000' }
-
-        it 'divides the range into 10 equal steps' do
-          expect(state_applier).to receive(:sleep).with(10.0).exactly(9).times
-          expect { state_applier.apply(update_config) }.to raise_error
-        end
-
-        context 'when the interval length is less than 10 seconds' do
-          let(:update_watch_time) { '1000-8000' }
-
-          it 'divides the interval into 1 second steps' do
-            expect(state_applier).to receive(:sleep).with(1.0).exactly(8).times
-            expect { state_applier.apply(update_config) }.to raise_error
-          end
-        end
-
-        context 'when the interval length is longer than 150 seconds' do
-          let(:update_watch_time) { '1000-301000' }
-
-          it 'divides the interval into 15 seconds steps' do
-            expect(state_applier).to receive(:sleep).with(15.0).exactly(20).times
-            expect { state_applier.apply(update_config) }.to raise_error
-          end
-        end
-      end
-
       context 'when trying to start a job' do
         context 'when job does not start within max_watch_time' do
           before do
@@ -190,13 +163,9 @@ module Bosh::Director
           end
 
           it 'raises AgentJobNotRunning' do
-            expect(state_applier).to receive(:sleep).with(1.0).twice
             expect(agent_client).to_not receive(:run_script).with('post-start', {})
 
-            expect { state_applier.apply(update_config) }.to raise_error(
-              AgentJobNotRunning,
-              "'fake-job/uuid-1 (0)' is not running after update. Review logs for failed jobs: broken_template",
-            )
+            expect { state_applier.apply(update_config) }.to raise_error AgentJobNotRunning
           end
 
           it 'does not update state on the instance model' do
@@ -213,10 +182,7 @@ module Bosh::Director
           end
 
           it 'raises AgentJobNotRunning with no failing jobs' do
-            expect { state_applier.apply(update_config) }.to raise_error(
-              AgentJobNotRunning,
-              "'fake-job/uuid-1 (0)' is not running after update.",
-            )
+            expect { state_applier.apply(update_config) }.to raise_error AgentJobNotRunning
           end
         end
 
@@ -233,12 +199,10 @@ module Bosh::Director
                   'processes' => [{ 'state' => 'starting', 'name' => 'template' }],
                 },
               )
-            allow(state_applier).to receive(:sleep)
             allow(agent_client).to receive(:run_script)
           end
 
           it 'runs the post-start script after instance is in desired state' do
-            expect(state_applier).to receive(:sleep).with(1.0).twice
             expect(agent_client).to receive(:run_script).with('post-start', {})
 
             state_applier.apply(update_config)
@@ -269,65 +233,6 @@ module Bosh::Director
             end.to change(instance.model, :state)
               .from('stopped')
               .to('started')
-          end
-        end
-
-        context 'when trying to stop a job' do
-          let(:instance_state) { 'stopped' }
-          let(:instance_model_state) { 'started' }
-
-          context 'when job does not stop within max_watch_time' do
-            before do
-              allow(agent_client).to receive(:get_state)
-                .and_return(
-                  {
-                    'job_state' => 'running',
-                    'processes' => [{ 'state' => 'starting', 'name' => 'template' }],
-                  },
-                  {
-                    'job_state' => 'running',
-                    'processes' => [{ 'state' => 'starting', 'name' => 'template' }],
-                  },
-                )
-            end
-
-            it 'raises AgentJobNotStopped' do
-              expect(state_applier).to receive(:sleep).with(1.0).twice
-              expect(agent_client).to_not receive(:run_script).with('post-start', {})
-
-              expect { state_applier.apply(update_config) }.to raise_error(
-                AgentJobNotStopped,
-                "'fake-job/uuid-1 (0)' is still running despite the stop command",
-              )
-            end
-
-            it 'does not update state on the instance model' do
-              expect(instance.model.state).to eq('started')
-
-              expect { state_applier.apply(update_config) }.to raise_error AgentJobNotStopped
-              expect(instance.model.state).to eq('started')
-            end
-          end
-
-          context 'when the job successfully stops' do
-            before do
-              allow(agent_client).to receive(:get_state).and_return(
-                {
-                  'job_state' => 'running',
-                  'processes' => [{ 'state' => 'starting', 'name' => 'template' }],
-                }, {
-                  'job_state' => 'stopped',
-                  'processes' => [{ 'state' => 'failing', 'name' => 'broken_template' }],
-                }
-              )
-            end
-
-            it 'does not run the post-start script after instance is in desired state' do
-              expect(state_applier).to receive(:sleep).with(1.0).twice
-              expect(agent_client).to_not receive(:run_script).with('post-start', {})
-
-              state_applier.apply(update_config)
-            end
           end
         end
       end
