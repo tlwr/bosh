@@ -32,10 +32,14 @@ describe 'Links with local_dns enabled', type: :integration do
   let(:api_instance_group_spec) do
     spec = Bosh::Spec::NewDeployments.simple_instance_group(
       name: 'my_api',
-      jobs: [{'name' => 'api_server', 'consumes' => {
-        'db' => {'from' => 'db'}
-      }}],
-      instances: 1
+      jobs: [{
+        'name' => 'api_server',
+        'consumes' => {
+          'db' => { 'from' => 'db' },
+        },
+        'release' => 'bosh-release',
+      }],
+      instances: 1,
     )
     spec['networks'] = [{ 'name' => 'manual-network'}]
     spec['azs'] = ['z1']
@@ -45,7 +49,7 @@ describe 'Links with local_dns enabled', type: :integration do
   let(:mysql_instance_group_spec) do
     spec = Bosh::Spec::NewDeployments.simple_instance_group(
       name: 'mysql',
-      jobs: [{'name' => 'database'}],
+      jobs: [{ 'name' => 'database', 'release' => 'bosh-release' }],
       instances: 1,
       static_ips: ['192.168.1.10']
     )
@@ -158,20 +162,22 @@ describe 'Links with local_dns enabled', type: :integration do
               jobs: [
                 {
                   'name' => 'api_server',
+                  'release' => 'bosh-release',
                   'consumes' => {
                     'db' => {
                       'address' => 'broker.external-db.com',
                       'instances' => [],
-                      'properties' => {'foo' => 'bar'},
+                      'properties' => { 'foo' => 'bar' },
                     },
                     'backup_db' => {
                       'address' => 'nothing',
                       'instances' => [],
-                      'properties' => {'foo' => 'bar'},
-                    }
-                  }
-                }],
-              instances: 1
+                      'properties' => { 'foo' => 'bar' },
+                    },
+                  },
+                },
+              ],
+              instances: 1,
             )
             instance_group_spec['networks'] = [{ 'name' => 'manual-network'}]
             instance_group_spec['azs'] = ['z1']
@@ -271,7 +277,8 @@ describe 'Links with local_dns enabled', type: :integration do
                     'as' => 'mysql_link',
                     'shared' => true
                   }
-                }
+                },
+                'release' => 'bosh-release',
               }
             ],
             instances: 1,
@@ -297,7 +304,8 @@ describe 'Links with local_dns enabled', type: :integration do
                     'from' => 'mysql_link',
                     'deployment' => 'provider_deployment'
                   }
-                }
+                },
+                'release' => 'bosh-release',
               }],
             instances: 1
           )
@@ -550,9 +558,10 @@ describe 'Links with local_dns enabled', type: :integration do
               'provides' => {
                 'db' => {
                   'as' => 'mysql_link',
-                  'shared' => true
-                }
-              }
+                  'shared' => true,
+                },
+              },
+              'release' => 'bosh-release',
             }
           ],
           instances: 1,
@@ -576,9 +585,10 @@ describe 'Links with local_dns enabled', type: :integration do
                 },
                 'backup_db' => {
                   'from' => 'mysql_link',
-                  'deployment' => 'provider_deployment'
-                }
-              }
+                  'deployment' => 'provider_deployment',
+                },
+              },
+              'release' => 'bosh-release',
             }],
           instances: 1
         )

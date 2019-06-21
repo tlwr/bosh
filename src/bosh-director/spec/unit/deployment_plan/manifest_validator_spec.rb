@@ -4,7 +4,7 @@ module Bosh
   module Director
     describe DeploymentPlan::ManifestValidator do
       let(:manifest_validator) { DeploymentPlan::ManifestValidator.new }
-      let(:manifest_hash) { Bosh::Spec::Deployments.simple_manifest }
+      let(:manifest_hash) { Bosh::Spec::NewDeployments.minimal_manifest }
 
       describe '#validate_manifest' do
         it 'raises error when disk_types is present' do
@@ -74,6 +74,16 @@ module Bosh
           end.to raise_error(
             Bosh::Director::V1DeprecatedJob,
             'Jobs are no longer supported, please use instance groups instead',
+          )
+        end
+
+        it 'raises a deprecation error when resource_pools is present as a manifest key' do
+          manifest_hash['resource_pools'] = ['foo']
+          expect do
+            manifest_validator.validate(manifest_hash)
+          end.to raise_error(
+            Bosh::Director::V1DeprecatedResourcePools,
+            'resource_pools is no longer supported. You must now define resources in a cloud-config',
           )
         end
       end

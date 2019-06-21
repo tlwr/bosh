@@ -13,8 +13,12 @@ module Bosh
         let(:runtime_config_models) { [instance_double(Bosh::Director::Models::Config)] }
         let(:runtime_config_consolidator) { instance_double(Bosh::Director::RuntimeConfig::RuntimeConfigsConsolidator) }
         let(:cloud_config_hash) { Bosh::Spec::NewDeployments.simple_cloud_config }
-        let(:runtime_config_hash) { Bosh::Spec::Deployments.simple_runtime_config }
-        let(:manifest_with_config_keys) { Bosh::Spec::Deployments.simple_manifest.merge('name' => 'with_keys') }
+        let(:runtime_config_hash) { Bosh::Spec::NewDeployments.simple_runtime_config }
+
+        let(:manifest_with_config_keys) do
+          Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups.merge('name' => 'with_keys')
+        end
+
         let(:manifest) { Manifest.new(manifest_hash, YAML.dump(manifest_hash), cloud_config_hash, runtime_config_hash) }
         let(:plan_options) do
           {}
@@ -35,7 +39,9 @@ module Bosh
         end
 
         before do
-          allow(Bosh::Director::RuntimeConfig::RuntimeConfigsConsolidator).to receive(:new).with(runtime_config_models).and_return(runtime_config_consolidator)
+          allow(Bosh::Director::RuntimeConfig::RuntimeConfigsConsolidator)
+            .to receive(:new).with(runtime_config_models).and_return(runtime_config_consolidator)
+
           allow(runtime_config_consolidator).to receive(:interpolate_manifest_for_deployment).with('simple').and_return({})
           allow(runtime_config_consolidator).to receive(:tags).and_return({})
           allow(runtime_config_consolidator).to receive(:have_runtime_configs?).and_return(false)
@@ -86,7 +92,7 @@ module Bosh
             planner
             expected_deployment_manifest_log = <<~LOGMESSAGE
               Deployment manifest:
-              {"name"=>"simple", "releases"=>[{"name"=>"bosh-release", "version"=>"0.1-dev"}], "stemcells"=>[{"name"=>"ubuntu-stemcell", "version"=>"1", "alias"=>"default"}], "update"=>{"canaries"=>2, "canary_watch_time"=>4000, "max_in_flight"=>1, "update_watch_time"=>20}, "instance_groups"=>[{"name"=>"foobar", "stemcell"=>"default", "vm_type"=>"a", "instances"=>3, "networks"=>[{"name"=>"a"}], "properties"=>{}, "jobs"=>[{"name"=>"foobar", "properties"=>{}}]}]}
+              {"name"=>"simple", "releases"=>[{"name"=>"bosh-release", "version"=>"0.1-dev"}], "stemcells"=>[{"name"=>"ubuntu-stemcell", "version"=>"1", "alias"=>"default"}], "update"=>{"canaries"=>2, "canary_watch_time"=>4000, "max_in_flight"=>1, "update_watch_time"=>20}, "instance_groups"=>[{"name"=>"foobar", "stemcell"=>"default", "vm_type"=>"a", "instances"=>3, "networks"=>[{"name"=>"a"}], "properties"=>{}, "jobs"=>[{"name"=>"foobar", "release"=>"bosh-release", "properties"=>{}}]}]}
             LOGMESSAGE
             expected_cloud_manifest_log = <<~LOGMESSAGE
               Cloud config manifest:
@@ -123,12 +129,22 @@ module Bosh
             end
 
             before do
-              allow(deployment_repo).to receive(:find_or_create_by_name).with(deployment_name, plan_options).and_return(deployment_model)
+              allow(deployment_repo)
+                .to receive(:find_or_create_by_name).with(deployment_name, plan_options).and_return(deployment_model)
               allow(runtime_config_consolidator).to receive(:runtime_configs).and_return(runtime_config_models)
             end
 
             it 'calls planner new with appropriate arguments' do
-              expect(Planner).to receive(:new).with(expected_attrs, manifest_hash, YAML.dump(manifest_hash), cloud_configs, runtime_config_models, deployment_model, expected_plan_options).and_call_original
+              expect(Planner).to receive(:new).with(
+                expected_attrs,
+                manifest_hash,
+                YAML.dump(manifest_hash),
+                cloud_configs,
+                runtime_config_models,
+                deployment_model,
+                expected_plan_options,
+              ).and_call_original
+
               planner
             end
           end
@@ -153,7 +169,8 @@ module Bosh
               it 'passes deployment name to get interpolated runtime_config tags' do
                 runtime_config_hash['tags'] = { 'runtime_tag' => '((some_variable))' }
 
-                expect(runtime_config_consolidator).to receive(:tags).with('simple').and_return('runtime_tag' => 'some_interpolated_value')
+                expect(runtime_config_consolidator)
+                  .to receive(:tags).with('simple').and_return('runtime_tag' => 'some_interpolated_value')
                 expect(planner.tags).to eq('runtime_tag' => 'some_interpolated_value')
               end
 
@@ -196,7 +213,8 @@ module Bosh
 
               before do
                 allow(runtime_config_consolidator).to receive(:have_runtime_configs?).and_return(true)
-                allow(runtime_config_consolidator).to receive(:interpolate_manifest_for_deployment).with('simple').and_return(runtime_config_hash)
+                allow(runtime_config_consolidator)
+                  .to receive(:interpolate_manifest_for_deployment).with('simple').and_return(runtime_config_hash)
               end
 
               context 'and the runtime config does not have any applicable jobs' do
@@ -212,7 +230,7 @@ module Bosh
 
               context 'and the runtime config does has applicable jobs' do
                 let(:runtime_config_hash) do
-                  Bosh::Spec::Deployments.simple_runtime_config.merge(
+                  Bosh::Spec::NewDeployments.simple_runtime_config.merge(
                     'addons' => [
                       {
                         'name' => 'first_addon',
@@ -237,24 +255,31 @@ module Bosh
 
               context 'with runtime variables' do
                 let(:runtime_config_hash) do
-                  Bosh::Spec::Deployments.simple_runtime_config.merge(
-                    'variables' => [{
-                      'name' => '/dns_healthcheck_server_tlsX',
-                      'type' => 'certificate',
-                      'options' => { 'is_ca' => true, 'common_name' => 'health.bosh-dns', 'extended_key_usage' => ['server_auth'] },
-                    },
-                                    {
-                                      'name' => '/dns_healthcheck_tls',
-                                      'type' => 'certificate',
-                                      'options' => { 'ca' => '/dns_healthcheck_server_tlsX' },
+                  Bosh::Spec::NewDeployments.simple_runtime_config.merge(
+                    'variables' => [
+                      {
+                        'name' => '/dns_healthcheck_server_tlsX',
+                        'type' => 'certificate',
+                        'options' => {
+                          'is_ca' => true,
+                          'common_name' => 'health.bosh-dns',
+                          'extended_key_usage' => ['server_auth'],
+                        },
+                      },
+                      {
+                        'name' => '/dns_healthcheck_tls',
+                        'type' => 'certificate',
+                        'options' => { 'ca' => '/dns_healthcheck_server_tlsX' },
 
-                                    },
-                                    {
-                                      'name' => '/dns_healthcheck_password',
-                                      'type' => 'password',
-                                    }],
+                      },
+                      {
+                        'name' => '/dns_healthcheck_password',
+                        'type' => 'password',
+                      },
+                    ],
                   )
                 end
+
                 it 'has variables from runtime config' do
                   expect(planner.variables.spec[0]).to eq(runtime_config_hash['variables'][0])
                   expect(planner.variables.spec[1]).to eq(runtime_config_hash['variables'][1])
@@ -300,7 +325,8 @@ module Bosh
                 it 'has azs as specified by users' do
                   expect(planner.instance_groups.length).to eq(1)
                   expect(planner.instance_groups.first.availability_zones.map(&:name)).to eq(%w[zone1 zone2])
-                  expect(planner.instance_groups.first.availability_zones.map(&:cloud_properties)).to eq([{ foo: 'bar' }, { foo: 'baz' }])
+                  expect(planner.instance_groups.first.availability_zones.map(&:cloud_properties))
+                    .to eq([{ foo: 'bar' }, { foo: 'baz' }])
                 end
               end
 
@@ -313,6 +339,7 @@ module Bosh
                     ],
                   )
                 end
+
                 it 'has azs as specified by users' do
                   expect(planner.instance_groups.length).to eq(2)
                   expect(planner.instance_groups[0].availability_zones.map(&:name)).to eq(['zone1'])
@@ -332,8 +359,9 @@ module Bosh
             end
 
             it "throws an error if the version of a release is 'latest'" do
-              invalid_manifest = Bosh::Spec::Deployments.runtime_config_latest_release
-              allow(runtime_config_consolidator).to receive(:interpolate_manifest_for_deployment).with(String).and_return(invalid_manifest)
+              invalid_manifest = Bosh::Spec::NewDeployments.simple_runtime_config('bosh-release', 'latest')
+              allow(runtime_config_consolidator)
+                .to receive(:interpolate_manifest_for_deployment).with(String).and_return(invalid_manifest)
 
               expect do
                 planner
@@ -344,7 +372,8 @@ module Bosh
 
             it 'throws an error if the release used by an addon is not listed in the releases section' do
               invalid_manifest = Bosh::Spec::Deployments.runtime_config_release_missing
-              allow(runtime_config_consolidator).to receive(:interpolate_manifest_for_deployment).with(String).and_return(invalid_manifest)
+              allow(runtime_config_consolidator)
+                .to receive(:interpolate_manifest_for_deployment).with(String).and_return(invalid_manifest)
 
               expect do
                 planner
@@ -365,8 +394,15 @@ module Bosh
           manifest_hash['releases'].each do |release_entry|
             instance_group = manifest_hash['instance_groups'].first
             release = Models::Release.make(name: release_entry['name'])
-            job = Models::Template.make(name: instance_group['jobs'].first['name'], release: release)
-            job2 = Models::Template.make(name: 'provides_job', release: release, spec: { properties: { 'a' => { default: 'b' } } })
+            job = Models::Template.make(
+              name: instance_group['jobs'].first['name'],
+              release: release,
+            )
+            job2 = Models::Template.make(
+              name: 'provides_job',
+              release: release,
+              spec: { properties: { 'a' => { default: 'b' } } },
+            )
             release_version = Models::ReleaseVersion.make(release: release, version: release_entry['version'])
             release_version.add_template(job)
             release_version.add_template(job2)

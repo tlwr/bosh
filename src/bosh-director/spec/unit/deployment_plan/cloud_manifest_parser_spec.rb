@@ -13,7 +13,7 @@ module Bosh::Director
 
     describe '#parse' do
       let(:parsed_cloud_planner) { subject.parse(cloud_manifest) }
-      let(:cloud_manifest) { Bosh::Spec::Deployments.simple_cloud_config }
+      let(:cloud_manifest) { Bosh::Spec::NewDeployments.simple_cloud_config }
 
       context 'when availability zones section is specified' do
         describe 'availability zones' do
@@ -41,10 +41,10 @@ module Bosh::Director
 
           it 'creates AvailabilityZone for each entry' do
             expect(parsed_cloud_planner.availability_zone('z1').name).to eq('z1')
-            expect(parsed_cloud_planner.availability_zone('z1').cloud_properties).to eq({'availability_zone' => 'us-east-1a'})
+            expect(parsed_cloud_planner.availability_zone('z1').cloud_properties).to eq('availability_zone' => 'us-east-1a')
             expect(parsed_cloud_planner.availability_zone('z1').cpi).to eq(nil)
             expect(parsed_cloud_planner.availability_zone('z2').name).to eq('z2')
-            expect(parsed_cloud_planner.availability_zone('z2').cloud_properties).to eq({'availability_zone' => 'us-east-2a'})
+            expect(parsed_cloud_planner.availability_zone('z2').cloud_properties).to eq('availability_zone' => 'us-east-2a')
             expect(parsed_cloud_planner.availability_zone('z2').cpi).to eq('cpi1')
           end
         end
@@ -54,15 +54,15 @@ module Bosh::Director
         context 'when compilation section is specified' do
           before do
             cloud_manifest.merge!('compilation' => {
-                'network' => 'a',
-                'cloud_properties' => {'super' => 'important'},
-                'workers' => 3
-              })
+              'network' => 'a',
+              'cloud_properties' => { 'super' => 'important' },
+              'workers' => 3,
+            })
           end
 
           it 'parses the compilation section' do
             expect(parsed_cloud_planner.compilation.network_name).to eq('a')
-            expect(parsed_cloud_planner.compilation.cloud_properties).to eq({'super' => 'important'})
+            expect(parsed_cloud_planner.compilation.cloud_properties).to eq('super' => 'important')
           end
         end
 
@@ -70,51 +70,51 @@ module Bosh::Director
           before { cloud_manifest.delete('compilation') }
 
           it 'raises an error' do
-            expect {
+            expect do
               parsed_cloud_planner
-            }.to raise_error(
-                ValidationMissingField,
-                /Required property 'compilation' was not specified in object .+/,
-              )
+            end.to raise_error(
+              ValidationMissingField,
+              /Required property 'compilation' was not specified in object .+/,
+            )
           end
         end
 
         context 'when compilation refers to a nonexistent network' do
           before do
             cloud_manifest.merge!('compilation' => {
-                'network' => 'nonexistent-network',
-                'cloud_properties' => {'super' => 'important'},
-                'workers' => 3
-              })
+              'network' => 'nonexistent-network',
+              'cloud_properties' => { 'super' => 'important' },
+              'workers' => 3,
+            })
           end
 
           it 'raises an error' do
-            expect {
+            expect do
               parsed_cloud_planner
-            }.to raise_error(
-                /unknown network 'nonexistent-network'/,
-              )
+            end.to raise_error(
+              /unknown network 'nonexistent-network'/,
+            )
           end
         end
 
         context 'when compilation refers to a network that does not have az that is specified in compilation' do
           before do
-            cloud_manifest.merge!('compilation' => {
-                'network' => 'a',
-                'cloud_properties' => {'super' => 'important'},
-                'workers' => 3,
-                'az' => 'z1'
-              })
-            cloud_manifest['azs'] = [{'name' => 'z1'}, {'name' => 'z2'}, {'name' => 'z3'}]
-            cloud_manifest['networks'].first['subnets'].first['azs'] = ['z2', 'z3']
+            cloud_manifest['compilation'] = {
+              'network' => 'a',
+              'cloud_properties' => { 'super' => 'important' },
+              'workers' => 3,
+              'az' => 'z1',
+            }
+            cloud_manifest['azs'] = [{ 'name' => 'z1' }, { 'name' => 'z2' }, { 'name' => 'z3' }]
+            cloud_manifest['networks'].first['subnets'].first['azs'] = %w[z2 z3]
           end
 
           it 'raises an error' do
-            expect {
+            expect do
               parsed_cloud_planner
-            }.to raise_error(
-                "Compilation config refers to az 'z1' but network 'a' has no matching subnet(s).",
-              )
+            end.to raise_error(
+              "Compilation config refers to az 'z1' but network 'a' has no matching subnet(s).",
+            )
           end
         end
       end
@@ -125,9 +125,10 @@ module Bosh::Director
             before do
               cloud_manifest.merge!(
                 'networks' => [{
-                    'name' => 'a',
-                    'subnets' => [],
-                  }])
+                  'name' => 'a',
+                  'subnets' => [],
+                }],
+              )
             end
 
             it 'should create manual network by default' do
@@ -140,57 +141,58 @@ module Bosh::Director
           context 'when network type is manual' do
             context 'when an availability zone is specified for a subnet' do
               it 'validates that a zone with that name is present' do
-                valid_manifest = cloud_manifest.merge({
-                    'azs' => [{'name' => 'fake-zone'}],
-                    'networks' => [
-                      {
-                        'name' => 'a', #for compilation
-                        'subnets' => []
-                      },
-                      {
-                        'name' => 'fake-network',
-                        'type' => 'manual',
-                        'subnets' => [
-                          {
-                            'range' => '192.168.1.0/24',
-                            'gateway' => '192.168.1.1',
-                            'dns' => ['192.168.1.1', '192.168.1.2'],
-                            'static' => ['192.168.1.10'],
-                            'reserved' => [],
-                            'cloud_properties' => {},
-                            'az' => 'fake-zone'
-                          }
-                        ]
-                      }]
-                  })
-                expect {
+                valid_manifest = cloud_manifest.merge(
+                  'azs' => [{ 'name' => 'fake-zone' }],
+                  'networks' => [
+                    {
+                      'name' => 'a', # for compilation
+                      'subnets' => [],
+                    },
+                    {
+                      'name' => 'fake-network',
+                      'type' => 'manual',
+                      'subnets' => [
+                        {
+                          'range' => '192.168.1.0/24',
+                          'gateway' => '192.168.1.1',
+                          'dns' => ['192.168.1.1', '192.168.1.2'],
+                          'static' => ['192.168.1.10'],
+                          'reserved' => [],
+                          'cloud_properties' => {},
+                          'az' => 'fake-zone',
+                        },
+                      ],
+                    },
+                  ],
+                )
+                expect do
                   subject.parse(valid_manifest)
-                }.to_not raise_error
+                end.to_not raise_error
               end
 
               it 'errors if no zone with that name is present' do
-                invalid_manifest = cloud_manifest.merge({
-                    'azs' => [{'name' => 'fake-zone'}],
-                    'networks' => [{
-                        'name' => 'fake-network',
-                        'type' => 'manual',
-                        'subnets' => [
-                          {
-                            'range' => '192.168.1.0/24',
-                            'gateway' => '192.168.1.1',
-                            'dns' => ['192.168.1.1', '192.168.1.2'],
-                            'static' => ['192.168.1.10'],
-                            'reserved' => [],
-                            'cloud_properties' => {},
-                            'az' => 'nonexistent-zone'
-                          }
-                        ]
-                      }]
-                  })
+                invalid_manifest = cloud_manifest.merge(
+                  'azs' => [{ 'name' => 'fake-zone' }],
+                  'networks' => [{
+                    'name' => 'fake-network',
+                    'type' => 'manual',
+                    'subnets' => [
+                      {
+                        'range' => '192.168.1.0/24',
+                        'gateway' => '192.168.1.1',
+                        'dns' => ['192.168.1.1', '192.168.1.2'],
+                        'static' => ['192.168.1.10'],
+                        'reserved' => [],
+                        'cloud_properties' => {},
+                        'az' => 'nonexistent-zone',
+                      },
+                    ],
+                  }],
+                )
 
-                expect {
+                expect do
                   subject.parse(invalid_manifest)
-                }.to raise_error(NetworkSubnetUnknownAvailabilityZone)
+                end.to raise_error(NetworkSubnetUnknownAvailabilityZone)
               end
             end
           end
@@ -198,49 +200,51 @@ module Bosh::Director
           context 'when network type is dynamic' do
             context 'when an availability zone is specified for a subnet' do
               it 'validates that a zone with that name is present' do
-                valid_manifest = cloud_manifest.merge({
-                    'azs' => [{'name' => 'fake-zone'}],
-                    'networks' => [
-                      {
-                        'name' => 'a', #for compilation
-                        'subnets' => []
-                      },
-                      {
-                        'name' => 'fake-network',
-                        'type' => 'dynamic',
-                        'subnets' => [
-                          {
-                            'dns' => ['192.168.1.1', '192.168.1.2'],
-                            'cloud_properties' => {},
-                            'az' => 'fake-zone'
-                          }
-                        ]
-                      }]
-                  })
-                expect {
+                valid_manifest = cloud_manifest.merge(
+                  'azs' => [{ 'name' => 'fake-zone' }],
+                  'networks' => [
+                    {
+                      'name' => 'a', # for compilation
+                      'subnets' => [],
+                    },
+                    {
+                      'name' => 'fake-network',
+                      'type' => 'dynamic',
+                      'subnets' => [
+                        {
+                          'dns' => ['192.168.1.1', '192.168.1.2'],
+                          'cloud_properties' => {},
+                          'az' => 'fake-zone',
+                        },
+                      ],
+                    },
+                  ],
+                )
+
+                expect do
                   subject.parse(valid_manifest)
-                }.to_not raise_error
+                end.to_not raise_error
               end
 
               it 'errors if no zone with that name is present' do
-                invalid_manifest = cloud_manifest.merge({
-                    'azs' => [{'name' => 'fake-zone'}],
-                    'networks' => [{
-                        'name' => 'fake-network',
-                        'type' => 'dynamic',
-                        'subnets' => [
-                          {
-                            'dns' => ['192.168.1.1', '192.168.1.2'],
-                            'cloud_properties' => {},
-                            'az' => 'nonexistent-zone'
-                          }
-                        ]
-                      }]
-                  })
+                invalid_manifest = cloud_manifest.merge(
+                  'azs' => [{ 'name' => 'fake-zone' }],
+                  'networks' => [{
+                    'name' => 'fake-network',
+                    'type' => 'dynamic',
+                    'subnets' => [
+                      {
+                        'dns' => ['192.168.1.1', '192.168.1.2'],
+                        'cloud_properties' => {},
+                        'az' => 'nonexistent-zone',
+                      },
+                    ],
+                  }],
+                )
 
-                expect {
+                expect do
                   subject.parse(invalid_manifest)
-                }.to raise_error(NetworkSubnetUnknownAvailabilityZone)
+                end.to raise_error(NetworkSubnetUnknownAvailabilityZone)
               end
             end
           end
@@ -290,18 +294,18 @@ module Bosh::Director
           context 'when more than one network have same canonical name' do
             before do
               cloud_manifest['networks'] = [
-                {'name' => 'bar', 'subnets' => []},
-                {'name' => 'Bar', 'subnets' => []},
+                { 'name' => 'bar', 'subnets' => [] },
+                { 'name' => 'Bar', 'subnets' => [] },
               ]
             end
 
             it 'raises an error' do
-              expect {
+              expect do
                 parsed_cloud_planner
-              }.to raise_error(
-                  DeploymentCanonicalNetworkNameTaken,
-                  "Invalid network name 'Bar', canonical name already taken",
-                )
+              end.to raise_error(
+                DeploymentCanonicalNetworkNameTaken,
+                "Invalid network name 'Bar', canonical name already taken",
+              )
             end
           end
         end
@@ -310,9 +314,9 @@ module Bosh::Director
           before { cloud_manifest.merge!('networks' => []) }
 
           it 'raises an error because deployment must have at least one network' do
-            expect {
+            expect do
               parsed_cloud_planner
-            }.to raise_error(DeploymentNoNetworks, 'No networks specified')
+            end.to raise_error(DeploymentNoNetworks, 'No networks specified')
           end
         end
 
@@ -320,12 +324,12 @@ module Bosh::Director
           before { cloud_manifest.delete('networks') }
 
           it 'raises an error because deployment must have at least one network' do
-            expect {
+            expect do
               parsed_cloud_planner
-            }.to raise_error(
-                ValidationMissingField,
-                /Required property 'networks' was not specified in object .+/,
-              )
+            end.to raise_error(
+              ValidationMissingField,
+              /Required property 'networks' was not specified in object .+/,
+            )
           end
         end
       end
@@ -335,8 +339,8 @@ module Bosh::Director
           context 'when each vm type has a unique name' do
             before do
               cloud_manifest['vm_types'] = [
-                Bosh::Spec::Deployments.vm_type.merge({'name' => 'vm1-name'}),
-                Bosh::Spec::Deployments.vm_type.merge({'name' => 'vm2-name'})
+                Bosh::Spec::NewDeployments.vm_type.merge('name' => 'vm1-name'),
+                Bosh::Spec::NewDeployments.vm_type.merge('name' => 'vm2-name'),
               ]
             end
 
@@ -354,18 +358,18 @@ module Bosh::Director
           context 'when more than one vm type have same name' do
             before do
               cloud_manifest['vm_types'] = [
-                Bosh::Spec::Deployments.vm_type.merge({'name' => 'same-name'}),
-                Bosh::Spec::Deployments.vm_type.merge({'name' => 'same-name'})
+                Bosh::Spec::NewDeployments.vm_type.merge('name' => 'same-name'),
+                Bosh::Spec::NewDeployments.vm_type.merge('name' => 'same-name'),
               ]
             end
 
             it 'raises an error' do
-              expect {
+              expect do
                 parsed_cloud_planner
-              }.to raise_error(
-                  DeploymentDuplicateVmTypeName,
-                  "Duplicate vm type name 'same-name'",
-                )
+              end.to raise_error(
+                DeploymentDuplicateVmTypeName,
+                "Duplicate vm type name 'same-name'",
+              )
             end
           end
         end
@@ -373,15 +377,16 @@ module Bosh::Director
 
       describe 'vm_extensions' do
         context 'when vm_extensions are specified' do
+          before do
+            cloud_manifest['vm_extensions'] = [
+              Bosh::Spec::NewDeployments.vm_extension.merge('name' => 'vm-extension-1-name'),
+              Bosh::Spec::NewDeployments.vm_extension.merge('name' => 'vm-extension-2-name'),
+            ]
+          end
 
-        before do
-          cloud_manifest['vm_extensions'] = [
-              Bosh::Spec::Deployments.vm_extension.merge({'name' => 'vm-extension-1-name'}),
-              Bosh::Spec::Deployments.vm_extension.merge({'name' => 'vm-extension-2-name'})
-          ]
-        end
           it 'should create vmExtension for each entry' do
-            expect(parsed_cloud_planner.vm_extensions.map(&:class)).to eq([DeploymentPlan::VmExtension, DeploymentPlan::VmExtension])
+            expect(parsed_cloud_planner.vm_extensions.map(&:class))
+              .to eq([DeploymentPlan::VmExtension, DeploymentPlan::VmExtension])
             expect(parsed_cloud_planner.vm_extensions.map(&:name)).to eq(['vm-extension-1-name', 'vm-extension-2-name'])
           end
         end
@@ -392,8 +397,8 @@ module Bosh::Director
           context 'when each disk type has a unique name' do
             before do
               cloud_manifest['disk_types'] = [
-                Bosh::Spec::Deployments.disk_type.merge('name' => 'dk1-name'),
-                Bosh::Spec::Deployments.disk_type.merge('name' => 'dk2-name'),
+                Bosh::Spec::NewDeployments.disk_type.merge('name' => 'dk1-name'),
+                Bosh::Spec::NewDeployments.disk_type.merge('name' => 'dk2-name'),
               ]
             end
 
@@ -411,8 +416,8 @@ module Bosh::Director
           context 'when more than one disk type have same name' do
             before do
               cloud_manifest['disk_types'] = [
-                Bosh::Spec::Deployments.disk_type.merge('name' => 'same-name'),
-                Bosh::Spec::Deployments.disk_type.merge('name' => 'same-name'),
+                Bosh::Spec::NewDeployments.disk_type.merge('name' => 'same-name'),
+                Bosh::Spec::NewDeployments.disk_type.merge('name' => 'same-name'),
               ]
             end
 
@@ -431,7 +436,7 @@ module Bosh::Director
 
     describe '#parse_availability_zones' do
       let(:parsed_availability_zones) { subject.parse_availability_zones(cloud_manifest) }
-      let(:cloud_manifest) { Bosh::Spec::Deployments.simple_cloud_config }
+      let(:cloud_manifest) { Bosh::Spec::NewDeployments.simple_cloud_config }
       let(:availability_zones) do
         {
           'azs' => [
@@ -451,6 +456,7 @@ module Bosh::Director
           ],
         }
       end
+
       before { cloud_manifest.merge!(availability_zones) }
 
       context 'if name is not present' do

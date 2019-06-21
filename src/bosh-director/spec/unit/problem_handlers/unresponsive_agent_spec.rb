@@ -13,7 +13,7 @@ module Bosh::Director
     end
     let(:planner_factory) { instance_double(Bosh::Director::DeploymentPlan::PlannerFactory) }
     let(:deployment_model) do
-      manifest = Bosh::Spec::Deployments.legacy_manifest
+      manifest = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
       Models::Deployment.make(name: manifest['name'], manifest: YAML.dump(manifest))
     end
     let(:variable_set) { Models::VariableSet.make(deployment: deployment_model) }
@@ -154,32 +154,32 @@ module Bosh::Director
         let(:spec) do
           {
             'deployment' => 'simple',
-            'job' => {'name' => 'job'},
+            'job' => { 'name' => 'job', 'release' => 'bosh-release' },
             'index' => 0,
             'vm_type' => {
               'name' => 'fake-vm-type',
-              'cloud_properties' => {'foo' => 'bar'},
+              'cloud_properties' => { 'foo' => 'bar' },
             },
             'stemcell' => {
               'name' => 'stemcell-name',
-              'version' => '3.0.2'
+              'version' => '3.0.2',
             },
             'networks' => networks,
             'template_hashes' => {},
-            'configuration_hash' => {'configuration' => 'hash'},
-            'rendered_templates_archive' => {'some' => 'template'},
-            'env' => {'key1' => 'value1'}
+            'configuration_hash' => { 'configuration' => 'hash' },
+            'rendered_templates_archive' => { 'some' => 'template' },
+            'env' => { 'key1' => 'value1' },
           }
         end
         let(:agent_spec) do
           {
             'deployment' => 'simple',
-            'job' => {'name' => 'job'},
+            'job' => { 'name' => 'job', 'release' => 'bosh-release' },
             'index' => 0,
             'networks' => networks,
             'template_hashes' => {},
-            'configuration_hash' => {'configuration' => 'hash'},
-            'rendered_templates_archive' => {'some' => 'template'}
+            'configuration_hash' => { 'configuration' => 'hash' },
+            'rendered_templates_archive' => { 'some' => 'template' },
           }
         end
         let(:fake_new_agent) { double(Bosh::Director::AgentClient) }
@@ -212,7 +212,12 @@ module Bosh::Director
 
           expect(fake_new_agent).to receive(:wait_until_ready).ordered
           expect(fake_new_agent).to receive(:update_settings).ordered
-          expect(fake_new_agent).to receive(:apply).with({'deployment' => 'simple', 'job' => {'name' => 'job'}, 'index' => 0, 'networks' => networks}).ordered
+          expect(fake_new_agent).to receive(:apply).with(
+            'deployment' => 'simple',
+            'job' => { 'name' => 'job', 'release' => 'bosh-release' },
+            'index' => 0,
+            'networks' => networks,
+          ).ordered
           expect(fake_new_agent).to receive(:get_state).and_return(agent_spec).ordered
           expect(fake_new_agent).to receive(:apply).with(agent_spec).ordered
           expect(fake_new_agent).to receive(:run_script).with('pre-start', {}).ordered
@@ -226,33 +231,33 @@ module Bosh::Director
           let(:spec) do
             {
               'deployment' => 'simple',
-              'job' => {'name' => 'job'},
+              'job' => { 'name' => 'job', 'release' => 'bosh-release' },
               'index' => 0,
               'vm_type' => {
                 'name' => 'fake-vm-type',
-                'cloud_properties' => {'foo' => 'bar'},
+                'cloud_properties' => { 'foo' => 'bar' },
               },
               'stemcell' => {
                 'name' => 'stemcell-name',
-                'version' => '3.0.2'
+                'version' => '3.0.2',
               },
               'networks' => networks,
               'template_hashes' => {},
-              'configuration_hash' => {'configuration' => 'hash'},
-              'rendered_templates_archive' => {'some' => 'template'},
-              'env' => {'key1' => 'value1'},
+              'configuration_hash' => { 'configuration' => 'hash' },
+              'rendered_templates_archive' => { 'some' => 'template' },
+              'env' => { 'key1' => 'value1' },
               'update' => {
                 'canaries' => 1,
                 'max_in_flight' => 10,
                 'canary_watch_time' => '1000-30000',
-                'update_watch_time' => '1000-30000'
-              }
+                'update_watch_time' => '1000-30000',
+              },
             }
           end
 
-          describe 'recreate_vm_skip_post_start' do
+          describe 'recreate_vm_without_wait' do
             it 'has a plan' do
-              plan_summary = handler.instance_eval(&ProblemHandlers::UnresponsiveAgent.plan_for(:recreate_vm_skip_post_start))
+              plan_summary = handler.instance_eval(&ProblemHandlers::UnresponsiveAgent.plan_for(:recreate_vm_without_wait))
               expect(plan_summary).to eq('Recreate VM without waiting for processes to start')
             end
 
@@ -260,7 +265,7 @@ module Bosh::Director
               expect_vm_to_be_created
 
               expect(fake_new_agent).to_not receive(:run_script).with('post-start', {})
-              handler.apply_resolution(:recreate_vm_skip_post_start)
+              handler.apply_resolution(:recreate_vm_without_wait)
 
               expect(Models::Vm.find(agent_id: 'agent-007', cid: 'vm-cid')).to be_nil
               expect(Models::Vm.find(agent_id: 'agent-222', cid: 'new-vm-cid')).not_to be_nil
@@ -274,7 +279,7 @@ module Bosh::Director
             end
 
             it 'recreates the VM and runs post_start script' do
-              allow(fake_new_agent).to receive(:get_state).and_return({'job_state' => 'running'})
+              allow(fake_new_agent).to receive(:get_state).and_return('job_state' => 'running')
 
               expect_vm_to_be_created
               expect(fake_new_agent).to receive(:run_script).with('post-start', {}).ordered

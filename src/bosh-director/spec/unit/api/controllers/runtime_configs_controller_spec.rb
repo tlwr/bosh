@@ -43,11 +43,10 @@ module Bosh::Director
       end
 
       describe 'when user has admin access' do
-
         before { authorize('admin', 'admin') }
 
         it 'gives a nice error when request body is not a valid yml' do
-          post '/diff', "}}}i'm not really yaml, hah!", {'CONTENT_TYPE' => 'text/yaml'}
+          post '/diff', "}}}i'm not really yaml, hah!", 'CONTENT_TYPE' => 'text/yaml'
 
           expect(last_response.status).to eq(400)
           expect(JSON.parse(last_response.body)['code']).to eq(440001)
@@ -55,12 +54,12 @@ module Bosh::Director
         end
 
         it 'gives a nice error when request body is empty' do
-          post '/diff', '', {'CONTENT_TYPE' => 'text/yaml'}
+          post '/diff', '', 'CONTENT_TYPE' => 'text/yaml'
 
           expect(last_response.status).to eq(400)
           expect(JSON.parse(last_response.body)).to eq(
-              'code' => 440001,
-              'description' => 'Manifest should not be empty',
+            'code' => 440001,
+            'description' => 'Manifest should not be empty',
           )
         end
 
@@ -70,7 +69,7 @@ module Bosh::Director
           end
 
           it 'returns 200 with an empty diff and an error message if the diffing fails' do
-            post '/diff', {}.to_yaml, {'CONTENT_TYPE' => 'text/yaml'}
+            post '/diff', {}.to_yaml, 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(200)
             expect(JSON.parse(last_response.body)['diff']).to eq([])
@@ -86,7 +85,7 @@ module Bosh::Director
 
           describe 'when runtime config already exists' do
             it 'shows an empty diff' do
-              post '/diff', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
               expect(last_response.body).to eq('{"diff":[]}')
@@ -96,17 +95,18 @@ module Bosh::Director
           describe 'when single line modified' do
             it 'shows a single line modified' do
               runtime_config['release']['version'] = '0.0.2'
-              post '/diff', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
-              expect(last_response.body).to eq('{"diff":[["release:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
+              expect(last_response.body)
+                .to eq('{"diff":[["release:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
             end
           end
 
           describe 'when single line added' do
             it 'shows a single line added' do
               runtime_config['addons']['jobs']['properties']['new-key'] = 'new-value'
-              post '/diff', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
               expect(last_response.body).to eq('{"diff":[["addons:",null],["  jobs:",null],["    properties:",null],["      new-key: \"<redacted>\"","added"]]}')
@@ -116,7 +116,7 @@ module Bosh::Director
           describe 'when redact=false' do
             it 'shows property values in plain text' do
               runtime_config['addons']['jobs']['properties']['new-key'] = 'new-value'
-              post '/diff?redact=false', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff?redact=false', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
               expect(last_response.body).to eq('{"diff":[["addons:",null],["  jobs:",null],["    properties:",null],["      new-key: new-value","added"]]}')
@@ -125,28 +125,28 @@ module Bosh::Director
 
           describe 'when diffing against empty yaml' do
             it "shows a full 'removed' diff" do
-              post '/diff', YAML.dump({}), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff', YAML.dump({}), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
               expect(last_response.body).to eq(
-                  '{"diff":[' +
-                      '["release:","removed"],' +
-                      '["  name: some-release","removed"],' +
-                      '["  version: 0.0.1","removed"],' +
-                      '["",null],' +
-                      '["addons:","removed"],' +
-                      '["  name: some-addon","removed"],' +
-                      '["  jobs:","removed"],' +
-                      '["    name: some-job","removed"],' +
-                      '["    release: some-release","removed"],' +
-                      '["    properties:","removed"],' +
-                      '["      some-key: \"<redacted>\"","removed"]]}')
+                '{"diff":[' \
+                    '["release:","removed"],' \
+                    '["  name: some-release","removed"],' \
+                    '["  version: 0.0.1","removed"],' \
+                    '["",null],' \
+                    '["addons:","removed"],' \
+                    '["  name: some-addon","removed"],' \
+                    '["  jobs:","removed"],' \
+                    '["    name: some-job","removed"],' \
+                    '["    release: some-release","removed"],' \
+                    '["    properties:","removed"],' \
+                    '["      some-key: \"<redacted>\"","removed"]]}',
+              )
             end
           end
         end
 
         describe 'when multiple named runtime configs exist' do
-
           let (:addons_runtime_config) do
             { addons: runtime_config['addons'] }
           end
@@ -160,10 +160,11 @@ module Bosh::Director
             it 'shows diff for default runtime config' do
               runtime_config['release']['version'] = '0.0.2'
 
-              post '/diff?name=', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff?name=', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
-              expect(last_response.body).to eq('{"diff":[["release:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
+              expect(last_response.body)
+                .to eq('{"diff":[["release:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
             end
           end
 
@@ -171,58 +172,60 @@ module Bosh::Director
             it 'shows diff for named runtime config' do
               dns_runtime_config['dns']['version'] = '0.0.2'
 
-              post '/diff?name=dns', YAML.dump(dns_runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+              post '/diff?name=dns', YAML.dump(dns_runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
               expect(last_response.status).to eq(200)
-              expect(last_response.body).to eq('{"diff":[["dns:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
+              expect(last_response.body)
+                .to eq('{"diff":[["dns:",null],["  version: 0.0.1","removed"],["  version: 0.0.2","added"]]}')
             end
           end
         end
 
         describe 'when runtime config is new' do
           it "shows a full 'added' diff" do
-            post '/diff', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+            post '/diff', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(200)
             expect(last_response.body).to eq(
-                '{"diff":[' +
-                    '["release:","added"],' +
-                    '["  name: some-release","added"],' +
-                    '["  version: 0.0.1","added"],' +
-                    '["",null],' +
-                    '["addons:","added"],' +
-                    '["  name: some-addon","added"],' +
-                    '["  jobs:","added"],' +
-                    '["    name: some-job","added"],' +
-                    '["    release: some-release","added"],' +
-                    '["    properties:","added"],' +
-                    '["      some-key: \"<redacted>\"","added"]]}')
+              '{"diff":[' \
+                  '["release:","added"],' \
+                  '["  name: some-release","added"],' \
+                  '["  version: 0.0.1","added"],' \
+                  '["",null],' \
+                  '["addons:","added"],' \
+                  '["  name: some-addon","added"],' \
+                  '["  jobs:","added"],' \
+                  '["    name: some-job","added"],' \
+                  '["    release: some-release","added"],' \
+                  '["    properties:","added"],' \
+                  '["      some-key: \"<redacted>\"","added"]]}',
+            )
           end
         end
 
         describe 'when previous runtime config is nil' do
-
           before do
             Bosh::Director::Api::RuntimeConfigManager.new.update('---')
           end
 
           it "shows a full 'added' diff" do
-            post '/diff', YAML.dump(runtime_config), {'CONTENT_TYPE' => 'text/yaml'}
+            post '/diff', YAML.dump(runtime_config), 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(200)
             expect(last_response.body).to eq(
-              '{"diff":[' +
-                '["release:","added"],' +
-                '["  name: some-release","added"],' +
-                '["  version: 0.0.1","added"],' +
-                '["",null],' +
-                '["addons:","added"],' +
-                '["  name: some-addon","added"],' +
-                '["  jobs:","added"],' +
-                '["    name: some-job","added"],' +
-                '["    release: some-release","added"],' +
-                '["    properties:","added"],' +
-                '["      some-key: \"<redacted>\"","added"]]}')
+              '{"diff":[' \
+                '["release:","added"],' \
+                '["  name: some-release","added"],' \
+                '["  version: 0.0.1","added"],' \
+                '["",null],' \
+                '["addons:","added"],' \
+                '["  name: some-addon","added"],' \
+                '["  jobs:","added"],' \
+                '["    name: some-job","added"],' \
+                '["    release: some-release","added"],' \
+                '["    properties:","added"],' \
+                '["      some-key: \"<redacted>\"","added"]]}',
+            )
           end
         end
 
@@ -232,29 +235,30 @@ module Bosh::Director
           end
 
           it 'shows a full "removed" diff' do
-            post '/diff', '--- {}', { 'CONTENT_TYPE' => 'text/yaml' }
+            post '/diff', '--- {}', 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(200)
             expect(last_response.body).to eq(
-              '{"diff":[' +
-                '["release:","removed"],' +
-                '["  name: some-release","removed"],' +
-                '["  version: 0.0.1","removed"],' +
-                '["",null],' +
-                '["addons:","removed"],' +
-                '["  name: some-addon","removed"],' +
-                '["  jobs:","removed"],' +
-                '["    name: some-job","removed"],' +
-                '["    release: some-release","removed"],' +
-                '["    properties:","removed"],' +
-                '["      some-key: \"<redacted>\"","removed"]]}')
+              '{"diff":[' \
+                '["release:","removed"],' \
+                '["  name: some-release","removed"],' \
+                '["  version: 0.0.1","removed"],' \
+                '["",null],' \
+                '["addons:","removed"],' \
+                '["  name: some-addon","removed"],' \
+                '["  jobs:","removed"],' \
+                '["    name: some-job","removed"],' \
+                '["    release: some-release","removed"],' \
+                '["    properties:","removed"],' \
+                '["      some-key: \"<redacted>\"","removed"]]}',
+            )
           end
         end
       end
 
       describe 'when user has no admin access' do
         it 'get unauthorized' do
-          post '/diff', '', {'CONTENT_TYPE' => 'text/yaml'}
+          post '/diff', '', 'CONTENT_TYPE' => 'text/yaml'
           expect(last_response.status).to eq(401)
         end
       end
@@ -265,10 +269,10 @@ module Bosh::Director
         before { authorize('admin', 'admin') }
 
         it 'creates a new runtime config' do
-          properties = YAML.dump(Bosh::Spec::Deployments.simple_runtime_config)
-          expect {
-            post '/', properties, {'CONTENT_TYPE' => 'text/yaml'}
-          }.to change(Bosh::Director::Models::Config, :count).from(0).to(1)
+          properties = YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config)
+          expect do
+            post '/', properties, 'CONTENT_TYPE' => 'text/yaml'
+          end.to change(Bosh::Director::Models::Config, :count).from(0).to(1)
 
           expect(last_response.status).to eq(201)
           expect(Bosh::Director::Models::Config.first.content).to eq(properties)
@@ -277,29 +281,29 @@ module Bosh::Director
         end
 
         it 'creates a new runtime config when one exists with different content' do
-          content = YAML.dump(Bosh::Spec::Deployments.simple_runtime_config)
-          Models::Config.make(:runtime, content: content+"123")
+          content = YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config)
+          Models::Config.make(:runtime, content: content + '123')
 
-          expect {
-            post '/', content, {'CONTENT_TYPE' => 'text/yaml'}
-          }.to change(Models::Config, :count)
+          expect do
+            post '/', content, 'CONTENT_TYPE' => 'text/yaml'
+          end.to change(Models::Config, :count)
 
           expect(last_response.status).to eq(201)
         end
 
         it 'ignores runtime config when config already exists' do
-          content = YAML.dump(Bosh::Spec::Deployments.simple_runtime_config)
+          content = YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config)
           Models::Config.make(:runtime, content: content)
 
-          expect {
-            post '/', content, {'CONTENT_TYPE' => 'text/yaml'}
-          }.to_not change(Models::Config, :count)
+          expect do
+            post '/', content, 'CONTENT_TYPE' => 'text/yaml'
+          end.to_not change(Models::Config, :count)
 
           expect(last_response.status).to eq(201)
         end
 
         it 'gives a nice error when request body is not a valid yml' do
-          post '/', "}}}i'm not really yaml, hah!", {'CONTENT_TYPE' => 'text/yaml'}
+          post '/', "}}}i'm not really yaml, hah!", 'CONTENT_TYPE' => 'text/yaml'
 
           expect(last_response.status).to eq(400)
           expect(JSON.parse(last_response.body)['code']).to eq(440001)
@@ -307,20 +311,20 @@ module Bosh::Director
         end
 
         it 'gives a nice error when request body is empty' do
-          post '/', '', {'CONTENT_TYPE' => 'text/yaml'}
+          post '/', '', 'CONTENT_TYPE' => 'text/yaml'
 
           expect(last_response.status).to eq(400)
           expect(JSON.parse(last_response.body)).to eq(
-              'code' => 440001,
-              'description' => 'Manifest should not be empty',
+            'code' => 440001,
+            'description' => 'Manifest should not be empty',
           )
         end
 
         it 'creates a new event' do
-          properties = YAML.dump(Bosh::Spec::Deployments.simple_runtime_config)
-          expect {
-            post '/', properties, {'CONTENT_TYPE' => 'text/yaml'}
-          }.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
+          properties = YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config)
+          expect do
+            post '/', properties, 'CONTENT_TYPE' => 'text/yaml'
+          end.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
           event = Bosh::Director::Models::Event.first
           expect(event.object_type).to eq('runtime-config')
           expect(event.object_name).to eq('default')
@@ -329,9 +333,9 @@ module Bosh::Director
         end
 
         it 'creates a new event with error' do
-          expect {
-            post '/', {}, {'CONTENT_TYPE' => 'text/yaml'}
-          }.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
+          expect do
+            post '/', {}, { 'CONTENT_TYPE' => 'text/yaml' }
+          end.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
           event = Bosh::Director::Models::Event.first
           expect(event.object_type).to eq('runtime-config')
           expect(event.object_name).to eq('default')
@@ -342,7 +346,7 @@ module Bosh::Director
 
         context 'when version field is an integer' do
           let(:runtime_config_version_int) do
-            config = Bosh::Spec::Deployments.simple_runtime_config
+            config = Bosh::Spec::NewDeployments.simple_runtime_config
             config['releases'].first['version'] = 2
             YAML.dump(config)
           end
@@ -353,13 +357,14 @@ module Bosh::Director
             end.to change(Bosh::Director::Models::Config, :count).from(0).to(1)
 
             expect(last_response.status).to eq(201)
-            expect(Bosh::Director::Models::Config.first.content).to eq(YAML.dump(Bosh::Spec::Deployments.simple_runtime_config))
+            expect(Bosh::Director::Models::Config.first.content)
+              .to eq(YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config))
           end
         end
 
         context 'when releases block does not contain version field' do
           let(:invalid_runtime_config) do
-            config = Bosh::Spec::Deployments.simple_runtime_config
+            config = Bosh::Spec::NewDeployments.simple_runtime_config
             config['releases'].first.delete('version')
             YAML.dump(config)
           end
@@ -378,9 +383,9 @@ module Bosh::Director
           let(:path) { '/?name=' }
 
           it "creates a new runtime config with name 'default'" do
-            properties = YAML.dump(Bosh::Spec::Deployments.simple_runtime_config)
+            properties = YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config)
 
-            post path, properties, {'CONTENT_TYPE' => 'text/yaml'}
+            post path, properties, 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(201)
             expect(Bosh::Director::Models::Config.first.name).to eq('default')
@@ -389,10 +394,10 @@ module Bosh::Director
 
         context 'when a name is passed in via a query param' do
           let(:path) { '/?name=smurf' }
-          let(:content) { YAML.dump(Bosh::Spec::Deployments.simple_runtime_config) }
+          let(:content) { YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config) }
 
           it 'creates a new named runtime config' do
-            post path, content, {'CONTENT_TYPE' => 'text/yaml'}
+            post path, content, 'CONTENT_TYPE' => 'text/yaml'
 
             expect(last_response.status).to eq(201)
             expect(Bosh::Director::Models::Config.first.name).to eq('smurf')
@@ -401,17 +406,17 @@ module Bosh::Director
           it 'ignores named runtime config when config already exists' do
             Models::Config.make(:runtime, content: content, name: 'smurf')
 
-            expect {
-              post path, content, {'CONTENT_TYPE' => 'text/yaml'}
-            }.to_not change(Models::Config, :count)
+            expect do
+              post path, content, 'CONTENT_TYPE' => 'text/yaml'
+            end.to_not change(Models::Config, :count)
 
             expect(last_response.status).to eq(201)
           end
 
           it 'creates a new event and add name to event context' do
-            expect {
-              post path, content, {'CONTENT_TYPE' => 'text/yaml'}
-            }.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
+            expect do
+              post path, content, 'CONTENT_TYPE' => 'text/yaml'
+            end.to change(Bosh::Director::Models::Event, :count).from(0).to(1)
 
             event = Bosh::Director::Models::Event.first
             expect(event.object_type).to eq('runtime-config')
@@ -423,10 +428,11 @@ module Bosh::Director
       end
 
       describe 'when user has readonly access' do
-        before { basic_authorize 'reader', 'reader' }
+        before { basic_authorize('reader', 'reader') }
 
         it 'denies access' do
-          expect(post('/', YAML.dump(Bosh::Spec::Deployments.simple_runtime_config), {'CONTENT_TYPE' => 'text/yaml'}).status).to eq(401)
+          expect(post('/', YAML.dump(Bosh::Spec::NewDeployments.simple_runtime_config), 'CONTENT_TYPE' => 'text/yaml').status)
+            .to eq(401)
         end
       end
     end
@@ -464,23 +470,23 @@ module Bosh::Director
         it 'returns STATUS 400 if limit was not specified or malformed' do
           get '/'
           expect(last_response.status).to eq(400)
-          expect(last_response.body).to eq("limit is required")
+          expect(last_response.body).to eq('limit is required')
 
-          get "/?limit="
+          get '/?limit='
           expect(last_response.status).to eq(400)
-          expect(last_response.body).to eq("limit is required")
+          expect(last_response.body).to eq('limit is required')
 
-          get "/?limit=foo"
+          get '/?limit=foo'
           expect(last_response.status).to eq(400)
           expect(last_response.body).to eq("limit is invalid: 'foo' is not an integer")
         end
       end
 
       describe 'when user has readonly access' do
-        before { basic_authorize 'reader', 'reader' }
-        before {
-          Bosh::Director::Models::Config.make(:content => '{}')
-        }
+        before do
+          basic_authorize('reader', 'reader')
+          Bosh::Director::Models::Config.make(content: '{}')
+        end
 
         it 'allows access' do
           expect(get('/?limit=2').status).to eq(200)

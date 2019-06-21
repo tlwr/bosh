@@ -7,6 +7,7 @@ describe 'env values in instance groups and resource pools', type: :integration 
         name: 'our_instance_group',
         jobs: [
           { 'name' => 'job_1_with_many_properties',
+            'release' => 'bosh-release',
             'properties' => job_properties },
         ],
         instances: 1,
@@ -71,7 +72,7 @@ describe 'env values in instance groups and resource pools', type: :integration 
       manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
       manifest_hash['instance_groups'] = [{
         'name' => 'foobar',
-        'jobs' => ['name' => 'job_1_with_many_properties'],
+        'jobs' => ['name' => 'job_1_with_many_properties', 'release' => 'bosh-release'],
         'vm_type' => 'a',
         'stemcell' => 'default',
         'instances' => 1,
@@ -110,59 +111,6 @@ describe 'env values in instance groups and resource pools', type: :integration 
       debug_output = bosh_runner.run("task --debug --event --cpi --result #{task_id}", no_login: true, include_credentials: false, env: client_env)
       expect(debug_output).to_not include('lazy smurf')
       expect(debug_output).to_not include('super_color')
-    end
-  end
-
-  # TODO: Remove test when done removing v1 manifest support
-  xcontext 'when resource pool env is using variables (legacy manifest)' do
-    with_reset_sandbox_before_each(config_server_enabled: true, user_authentication: 'uaa')
-
-    let(:env_hash) do
-      {
-        'env1' => '((env1_placeholder))',
-        'env2' => 'env_value2',
-        'env3' => {
-          'color' => '((color_placeholder))',
-        },
-        'bosh' => {
-          'group' => 'foobar',
-          'password' => 'foobar',
-        },
-      }
-    end
-
-    let(:expected_env_hash) do
-      {
-        'env1' => 'lazy cat',
-        'env2' => 'env_value2',
-        'env3' => {
-          'color' => 'smurf blue',
-        },
-        'bosh' => {
-          'dummy_agent_key_merged' => 'This key must be sent to agent', # merged from the director yaml configuration (agent.env.bosh key)
-          'mbus' => Hash,
-          'group' => 'testdirector-simple-foobar',
-          'password' => 'foobar',
-          'groups' => ['testdirector', 'simple', 'foobar', 'testdirector-simple', 'simple-foobar', 'testdirector-simple-foobar'],
-        },
-      }
-    end
-
-    it 'should interpolate them correctly' do
-      config_server_helper.put_value(prepend_namespace('env1_placeholder'), 'lazy cat')
-      config_server_helper.put_value(prepend_namespace('color_placeholder'), 'smurf blue')
-
-      deployment_manifest = Bosh::Spec::Deployments.legacy_manifest
-      deployment_manifest['resource_pools'][0]['env'] = env_hash
-
-      deploy_from_scratch(no_login: true, include_credentials: false, env: client_env, manifest_hash: deployment_manifest)
-
-      create_vm_invocations = current_sandbox.cpi.invocations_for_method('create_vm')
-      expect(create_vm_invocations.last.inputs['env']).to match(expected_env_hash)
-
-      deployments = table(bosh_runner.run('deployments', json: true, include_credentials: false, env: client_env))
-      expect(deployments).to eq([{ 'name' => 'simple', 'release_s' => 'bosh-release/0+dev.1', 'stemcell_s' => 'ubuntu-stemcell/1',
-                                   'team_s' => '' }])
     end
   end
 

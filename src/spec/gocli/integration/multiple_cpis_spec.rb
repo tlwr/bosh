@@ -5,7 +5,11 @@ describe 'Using multiple CPIs', type: :integration do
 
   let(:stemcell_filename) { spec_asset('valid_stemcell.tgz') }
   let(:cloud_config) { Bosh::Spec::NewDeployments.simple_cloud_config_with_multiple_azs_and_cpis }
-  let(:cpi_config) { Bosh::Spec::Deployments.multi_cpi_config(current_sandbox.sandbox_path(Bosh::Dev::Sandbox::Main::EXTERNAL_CPI)) }
+
+  let(:cpi_config) do
+    Bosh::Spec::NewDeployments.multi_cpi_config(current_sandbox.sandbox_path(Bosh::Dev::Sandbox::Main::EXTERNAL_CPI))
+  end
+
   let(:instance_group) { Bosh::Spec::NewDeployments.simple_instance_group(azs: %w[z1 z2]) }
   let(:deployment) { Bosh::Spec::NewDeployments.test_release_manifest_with_stemcell.merge('instance_groups' => [instance_group]) }
   let(:cloud_config_manifest) { yaml_file('cloud_manifest', cloud_config) }
@@ -125,17 +129,22 @@ describe 'Using multiple CPIs', type: :integration do
               'process_state' => 'running',
               'az' => 'z1',
               'ips' => /.*/,
+              'deployment' => 'simple',
             },
             {
               'instance' => %r{foobar/.*},
               'process_state' => 'running',
               'az' => 'z1',
               'ips' => /.*/,
+              'deployment' => 'simple',
             },
-            { 'instance' => %r{foobar/.*},
+            {
+              'instance' => %r{foobar/.*},
               'process_state' => 'running',
               'az' => 'z2',
-              'ips' => /.*/ },
+              'ips' => /.*/,
+              'deployment' => 'simple',
+            },
           )
 
           # start the transition of using new cpi names
@@ -171,11 +180,15 @@ describe 'Using multiple CPIs', type: :integration do
               'process_state' => 'running',
               'az' => 'z1',
               'ips' => /.*/,
+              'deployment' => 'simple',
             },
-            { 'instance' => %r{foobar/.*},
+            {
+              'instance' => %r{foobar/.*},
               'process_state' => 'running',
               'az' => 'z2',
-              'ips' => /.*/ },
+              'ips' => /.*/,
+              'deployment' => 'simple',
+            },
           )
 
           # now that our deployment is on the latest cloud-config, it no longer has a dependence on the old cpi names
@@ -207,17 +220,20 @@ describe 'Using multiple CPIs', type: :integration do
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         {
           'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         { 'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z2',
-          'ips' => /.*/ },
+          'ips' => /.*/,
+          'deployment' => 'simple' },
       )
 
       # Remove z2 CPI
@@ -227,7 +243,7 @@ describe 'Using multiple CPIs', type: :integration do
 
       output = bosh_runner.run("deploy --recreate #{deployment_manifest.path}", deployment_name: 'simple', failure_expected: true)
       error_message = "CPI 'cpi-name2' not found in cpi-config"
-      expect(output).to match /#{error_message}/
+      expect(output).to match(/#{error_message}/)
 
       # Bosh can't delete VM since its CPI no longer exists
       output = table(bosh_runner.run('vms', deployment_name: 'simple', json: true))
@@ -273,17 +289,20 @@ describe 'Using multiple CPIs', type: :integration do
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         {
           'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         { 'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z2',
-          'ips' => /.*/ },
+          'ips' => /.*/,
+          'deployment' => 'simple' },
       )
 
       # Remove z2 CPI
@@ -293,7 +312,7 @@ describe 'Using multiple CPIs', type: :integration do
 
       output = bosh_runner.run("deploy --recreate #{deployment_manifest.path}", deployment_name: 'simple', failure_expected: true)
       error_message = "CPI 'cpi-name2' not found in cpi-config"
-      expect(output).to match /#{error_message}/
+      expect(output).to match(/#{error_message}/)
 
       # Bosh can't delete VM since its CPI no longer exists
       output = table(bosh_runner.run('vms', deployment_name: 'simple', json: true))
@@ -358,17 +377,20 @@ describe 'Using multiple CPIs', type: :integration do
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         {
           'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z1',
           'ips' => /.*/,
+          'deployment' => 'simple',
         },
         { 'instance' => %r{foobar/.*},
           'process_state' => 'running',
           'az' => 'z2',
-          'ips' => /.*/ },
+          'ips' => /.*/,
+          'deployment' => 'simple' },
       )
 
       # Remove z2 from cloud config

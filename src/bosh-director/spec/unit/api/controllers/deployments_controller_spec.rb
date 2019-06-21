@@ -21,12 +21,12 @@ module Bosh::Director
         manifest_hash['name'] = deployment_name
         manifest_hash['instance_groups'] << {
           'name' => 'another-errand',
-          'jobs' => [{'name' => 'errand1'}],
+          'jobs' => [{ 'name' => 'errand1', 'release' => 'bosh-release' }],
           'stemcell' => 'default',
           'lifecycle' => 'errand',
           'vm_type' => 'a',
           'instances' => 1,
-          'networks' => [{'name' => 'a'}]
+          'networks' => [{ 'name' => 'a' }],
         }
         manifest_hash
       end
@@ -418,6 +418,51 @@ module Bosh::Director
 
             task = expect_redirect_to_queued_task(last_response)
             expect(task.context_id).to eq(context_id)
+          end
+        end
+
+        describe 'stopping an instance in isolation' do
+          let!(:deployment) { Models::Deployment.create(name: 'test-deployment', manifest: YAML.dump('foo' => 'bar')) }
+          let!(:instance) { Models::Instance.make(deployment: deployment, job: 'dea', index: '2') }
+
+          context 'for a generic soft stop request' do
+            let(:task) { instance_double('Bosh::Director::Models::Task', id: 1) }
+            let(:job_queue) { instance_double('Bosh::Director::JobQueue', enqueue: task) }
+            before { allow(JobQueue).to receive(:new).and_return(job_queue) }
+
+            it 'enqueues a StopInstance task' do
+              expect(job_queue).to receive(:enqueue).with(
+                'admin',
+                Jobs::StopInstance,
+                'stop instance',
+                ['test-deployment', instance.id, { hard: false, skip_drain: false }],
+                deployment,
+                '',
+              ).and_return(task)
+
+              post '/test-deployment/instance_groups/dea/2/actions/stop'
+              expect(last_response).to be_redirect
+            end
+          end
+
+          context 'when skip_drain and hard stop are both requested' do
+            let(:task) { instance_double('Bosh::Director::Models::Task', id: 1) }
+            let(:job_queue) { instance_double('Bosh::Director::JobQueue', enqueue: task) }
+            before { allow(JobQueue).to receive(:new).and_return(job_queue) }
+
+            it 'enqueues a StopInstance task with the correct options' do
+              expect(job_queue).to receive(:enqueue).with(
+                'admin',
+                Jobs::StopInstance,
+                'stop instance',
+                ['test-deployment', instance.id, { hard: true, skip_drain: true }],
+                deployment,
+                '',
+              ).and_return(task)
+
+              post '/test-deployment/instance_groups/dea/2/actions/stop?skip_drain=true&hard=true'
+              expect(last_response).to be_redirect
+            end
           end
         end
 
@@ -1329,7 +1374,7 @@ module Bosh::Director
             version.add_template(Models::Template.make(name: 'job_using_pkg_1', release: release))
           end
           let(:deployment) { Models::Deployment.create(:name => 'test_deployment', :manifest => manifest) }
-          let(:default_manifest) { Bosh::Spec::Deployments.remote_stemcell_manifest('stemcell_url', 'stemcell_sha1') }
+          let(:default_manifest) { Bosh::Spec::NewDeployments.minimal_manifest }
 
           context 'multiple instances' do
             let(:manifest) do
@@ -1511,7 +1556,7 @@ module Bosh::Director
             end
 
             context 'is "service"' do
-              let(:manifest) { YAML.dump(default_manifest.merge(Bosh::Spec::Deployments.test_release_job)) }
+              let(:manifest) { YAML.dump(default_manifest.merge(Bosh::Spec::NewDeployments.simple_instance_group)) }
               let(:instance_lifecycle) { 'service' }
 
               context 'and state is either "started" or "stopped"' do
@@ -1563,7 +1608,7 @@ module Bosh::Director
             end
 
             context 'is "errand"' do
-              let(:manifest) { YAML.dump(default_manifest.merge(Bosh::Spec::Deployments.test_release_job)) }
+              let(:manifest) { YAML.dump(default_manifest.merge(Bosh::Spec::NewDeployments.simple_instance_group)) }
               let(:instance_lifecycle) { 'errand' }
 
               it 'sets "expects_vm" to "false"' do
@@ -1859,12 +1904,12 @@ module Bosh::Director
             let(:service_errand) do
               {
                 'name' => 'service_errand_job',
-                'jobs' => [{'name' => 'job_with_bin_run'}],
+                'jobs' => [{ 'name' => 'job_with_bin_run', 'release' => 'bosh-release' }],
                 'lifecycle' => 'service',
                 'vm_type' => 'a',
                 'stemcell' => 'default',
                 'instances' => 1,
-                'networks' => [{'name' => 'a'}]
+                'networks' => [{ 'name' => 'a' }],
               }
             end
 

@@ -233,9 +233,9 @@ describe 'CPI calls', type: :integration do
             name: 'first-job',
             static_ips: ['192.168.1.10'],
             instances: 1,
-            jobs: ['name' => 'foobar_without_packages'],
-            persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name']
-          )
+            jobs: ['name' => 'foobar_without_packages', 'release' => 'bosh-release'],
+            persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name'],
+          ),
         ]
         cloud_config_hash = Bosh::Spec::NewDeployments.simple_cloud_config
         cloud_config_hash['networks'].first['subnets'].first['static'] = ['192.168.1.10', '192.168.1.11']
@@ -330,7 +330,7 @@ describe 'CPI calls', type: :integration do
             name: 'first-job',
             static_ips: ['192.168.1.11'],
             instances: 1,
-            jobs: ['name' => 'foobar'],
+            jobs: ['name' => 'foobar', 'release' => 'bosh-release'],
             persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name'],
           ),
         ]
@@ -487,9 +487,9 @@ describe 'CPI calls', type: :integration do
             name: 'first-job',
             static_ips: ['192.168.1.10'],
             instances: 1,
-            jobs: ['name' => 'foobar_without_packages'],
-            persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name']
-          )
+            jobs: ['name' => 'foobar_without_packages', 'release' => 'bosh-release'],
+            persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name'],
+          ),
         ]
         cloud_config_hash = Bosh::Spec::NewDeployments.simple_cloud_config
         cloud_config_hash['networks'].first['subnets'].first['static'] = ['192.168.1.10', '192.168.1.11']
@@ -585,7 +585,7 @@ describe 'CPI calls', type: :integration do
             name: 'first-job',
             static_ips: ['192.168.1.11'],
             instances: 1,
-            jobs: ['name' => 'foobar'],
+            jobs: ['name' => 'foobar', 'release' => 'bosh-release'],
             persistent_disk_type: Bosh::Spec::NewDeployments.disk_type['name'],
           ),
         ]
@@ -839,7 +839,7 @@ describe 'CPI calls', type: :integration do
     before do
       cpi_path = current_sandbox.sandbox_path(Bosh::Dev::Sandbox::Main::EXTERNAL_CPI)
       cloud_config_manifest = yaml_file('cloud_manifest', Bosh::Spec::NewDeployments.simple_cloud_config_with_multiple_azs_and_cpis)
-      cpi_config_manifest = yaml_file('cpi_manifest', Bosh::Spec::Deployments.multi_cpi_config(cpi_path))
+      cpi_config_manifest = yaml_file('cpi_manifest', Bosh::Spec::NewDeployments.multi_cpi_config(cpi_path))
 
       bosh_runner.run("update-cloud-config #{cloud_config_manifest.path}")
       bosh_runner.run("update-cpi-config #{cpi_config_manifest.path}")

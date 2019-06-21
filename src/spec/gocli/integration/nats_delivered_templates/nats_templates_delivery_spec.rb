@@ -18,12 +18,12 @@ describe 'deliver rendered templates through nats', type: :integration do
 
   let(:manifest_hash) do
     manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups
-    manifest_hash['stemcells'] = [Bosh::Spec::Deployments.stemcell]
     manifest_hash['instance_groups'] = [{
        'name' => 'our_instance_group',
        'jobs' => [{
                     'name' => 'job_1_with_many_properties',
-                    'properties' => job_properties
+                    'properties' => job_properties,
+                    'release' => 'bosh-release',
                   }],
        'vm_type' => 'smurf-vm-type',
        'stemcell' => 'default',
@@ -96,14 +96,17 @@ describe 'deliver rendered templates through nats', type: :integration do
                                  'name' => 'instance_group_1',
                                  'jobs' => [{
                                                    'name' => 'job_1_with_many_properties',
-                                                   'properties' => job_properties
+                                                   'properties' => job_properties,
+                                                   'release' => 'bosh-release',
                                                  },
                                                  {
+                                                   'release' => 'bosh-release',
                                                    'name' => 'job_2_with_many_properties',
                                                    'properties' => job_2_properties
                                                  },
                                                  {
                                                    'name' => 'errand1',
+                                                   'release' => 'bosh-release',
                                                    'properties' => { 'errand1' => { 'exit_code' => 10} }
                                                  }],
                                  'vm_type' => 'smurf-vm-type',
@@ -114,14 +117,17 @@ describe 'deliver rendered templates through nats', type: :integration do
                                 'name' => 'instance_group_2',
                                 'jobs' => [{
                                                   'name' => 'job_1_with_many_properties',
+                                                  'release' => 'bosh-release',
                                                   'properties' => job_2_properties
                                                 },
                                                 {
                                                   'name' => 'job_2_with_many_properties',
+                                                  'release' => 'bosh-release',
                                                   'properties' => job_properties
                                                 },
                                                 {
                                                   'name' => 'errand1',
+                                                  'release' => 'bosh-release',
                                                   'properties' => { 'errand1' => { 'exit_code' => 5} }
                                                 }],
                                 'vm_type' => 'smurf-vm-type',
@@ -166,6 +172,5 @@ describe 'deliver rendered templates through nats', type: :integration do
       zegrep_output = `zegrep 'GARGAMEL_COLOR_IS_NOT_BLUE|RED_IS_AZRIEL' #{current_sandbox.blobstore_storage_dir}/*`
       expect(zegrep_output.empty?).to be_truthy
     end
-
   end
 end
