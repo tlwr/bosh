@@ -93,6 +93,30 @@ describe 'start command', type: :integration do
       output = deploy_simple_manifest(manifest_hash: manifest_hash)
       expect(output).not_to include('foobar')
     end
+
+    context 'after a hard stop' do
+      before do
+        isolated_stop(instance_group: 'foobar', index: 0, params: { hard: true })
+      end
+
+      it 'creates the missing vm and starts the instance' do
+        expect do
+          output = isolated_start(instance_group: 'foobar', index: 0)
+          expect(output).to match(/Starting instance foobar: foobar.* \(0\)/)
+        end.to change { vm_states }
+          .from(
+            'another-job/0' => 'running',
+            'foobar/1' => 'running',
+            'foobar/2' => 'running',
+          )
+          .to(
+            'another-job/0' => 'running',
+            'foobar/0' => 'running',
+            'foobar/1' => 'running',
+            'foobar/2' => 'running',
+          )
+      end
+    end
   end
 
   context 'after a failed deploy' do
