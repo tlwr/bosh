@@ -116,6 +116,13 @@ describe 'start command', type: :integration do
             'foobar/2' => 'running',
           )
       end
+
+      it 'does not update the instance on subsequent deploys' do
+        isolated_start(instance_group: 'foobar', index: 0)
+
+        output = deploy_simple_manifest(manifest_hash: manifest_hash)
+        expect(output).not_to include('foobar')
+      end
     end
   end
 
@@ -164,8 +171,15 @@ describe 'start command', type: :integration do
         deploy(manifest_hash: late_fail_manifest, failure_expected: true)
       end
 
-      it 'only starts the indexed job' do
+      it 'only starts the specified soft stopped instance' do
         isolated_stop(instance_group: 'foobar', index: 0)
+        output = isolated_start(instance_group: 'foobar', index: 0)
+        expect(output).not_to include('another-job')
+        expect(output).to include('foobar')
+      end
+
+      it 'only starts the specified hard stopped instance' do
+        isolated_stop(instance_group: 'foobar', index: 0, params: { hard: true })
         output = isolated_start(instance_group: 'foobar', index: 0)
         expect(output).not_to include('another-job')
         expect(output).to include('foobar')
