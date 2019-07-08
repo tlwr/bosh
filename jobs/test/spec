@@ -1,0 +1,12 @@
+---
+name: test
+
+templates: {}
+
+packages:
+- bundler
+- ruby-2.6.3-r0.14.0
+- libpq
+- mysql
+
+properties: {}

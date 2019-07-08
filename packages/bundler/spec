@@ -1,0 +1,8 @@
+---
+name: bundler
+
+dependencies: []
+#- ruby-2.6.3-r0.14.0
+
+files:
+- bundler/bundler.gem

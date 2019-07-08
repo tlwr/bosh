@@ -1,0 +1,4 @@
+set -e
+
+mkdir -p $BOSH_INSTALL_TARGET
+mv bundler/bundler.gem $BOSH_INSTALL_TARGET/bundler.gem
