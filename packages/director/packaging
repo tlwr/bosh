@@ -7,6 +7,8 @@ mysqlclient_dir=/var/vcap/packages/mysql
 
 source /var/vcap/packages/ruby-2.6.3-r0.14.0/bosh/compile.env
 
+gem install -f /var/vcap/packages/bundler/bundler.gem
+
 for gemspec in $( find . -maxdepth 2 -name *.gemspec ); do
   gem_name="$( basename "$( dirname "$gemspec" )" )"
   gem_spec="$( basename "$gemspec" )"
@@ -36,6 +38,9 @@ bundle config build.mysql2 \
 bundle config build.pg \
   --with-pg-lib=$libpq_dir/lib \
   --with-pg-include=$libpq_dir/include
+
+# temporary hack until https://github.com/bundler/bundler/pull/7023 is published in bundler (probably 2.0.3)
+gem install -i ${BOSH_INSTALL_TARGET}/gem_home -n ${BOSH_INSTALL_TARGET}/bin vendor/cache/pg-*.gem -- --with-pg-lib=$libpq_dir/lib --with-pg-include=$libpq_dir/include
 
 bundle install \
   --local \

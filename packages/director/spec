@@ -5,6 +5,7 @@ dependencies:
 - libpq
 - mysql
 - ruby-2.6.3-r0.14.0
+- bundler
 
 files:
 - bosh-director/**/*

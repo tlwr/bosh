@@ -1,0 +1,7 @@
+---
+name: bundler
+
+dependencies: []
+
+files:
+- bundler/bundler.gem
