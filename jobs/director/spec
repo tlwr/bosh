@@ -50,6 +50,7 @@ packages:
 - davcli
 - bosh-gcscli
 - verify_multidigest
+- bundler
 
 properties:
   env.http_proxy:

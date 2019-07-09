@@ -1,7 +1,9 @@
 ---
 name: test
 
-templates: {}
+templates:
+  Gemfile: Gemfile
+  install.sh: bin/install.sh
 
 packages:
 - bundler
