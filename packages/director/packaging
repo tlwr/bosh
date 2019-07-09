@@ -5,12 +5,16 @@ mkdir -p ${BOSH_INSTALL_TARGET}/{bin,gem_home}
 libpq_dir=/var/vcap/packages/libpq
 mysqlclient_dir=/var/vcap/packages/mysql
 
-gem install bundler -i /var/vcap/packages/bundler/gems
-bundle update --bundler
+# gem install bundler -i /var/vcap/packages/bundler/gems
+# bundle update --bundler
 
 source /var/vcap/packages/ruby-2.6.3-r0.14.0/bosh/compile.env
 
-gem install -f /var/vcap/packages/bundler/bundler.gem
+# gem install -f /var/vcap/packages/bundler/bundler.gem
+
+# temporary hack until https://github.com/bundler/bundler/pull/7023 
+# is published in bundler (probably 2.0.3 or 2.1.0)
+gem install ${BOSH_INSTALL_TARGET}/bundler/bundler*.gem -i /var/vcap/packages/bundler/gems
 
 for gemspec in $( find . -maxdepth 2 -name *.gemspec ); do
   gem_name="$( basename "$( dirname "$gemspec" )" )"
@@ -42,7 +46,7 @@ bundle config build.pg \
   --with-pg-lib=$libpq_dir/lib \
   --with-pg-include=$libpq_dir/include
 
-# temporary hack until https://github.com/bundler/bundler/pull/7023 is published in bundler (probably 2.0.3)
+# temporary hack until https://github.com/bundler/bundler/pull/7023 is published in bundler (probably 2.0.3 or 2.1.0)
 gem install -i ${BOSH_INSTALL_TARGET}/gem_home -n ${BOSH_INSTALL_TARGET}/bin vendor/cache/pg-*.gem -- --with-pg-lib=$libpq_dir/lib --with-pg-include=$libpq_dir/include
 
 bundle install \

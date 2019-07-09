@@ -1,4 +1,22 @@
 set -e
 
+source /var/vcap/packages/ruby-2.6.3-r0.14.0/bosh/compile.env
+
+apt-get install -y git
+
 mkdir -p $BOSH_INSTALL_TARGET
-mv bundler/bundler.gem $BOSH_INSTALL_TARGET/bundler.gem
+
+gem install ronn:'~> 0.7.3'
+mkdir -p /tmp/bundler
+pushd /tmp/bundler
+  git clone https://github.com/bundler/bundler.git
+  pushd bundler
+    rake build
+    # gem install pkg/bundler-*.gem -i /var/vcap/packages/bundler/gems
+    # bosh add-blob pkg/bundler*.gem bundler/bundler.gem
+    mv pkg/bundler-*.gem $BOSH_INSTALL_TARGET/bundler.gem
+  popd
+popd
+
+
+
