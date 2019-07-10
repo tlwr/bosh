@@ -3,11 +3,17 @@ require_relative '../spec_helper'
 describe 'start command', type: :integration do
   with_reset_sandbox_before_each
 
-  def vm_states
+  def job_states
     director.instances.each_with_object({}) do |instance, result|
       unless instance.last_known_state.empty?
         result["#{instance.instance_group_name}/#{instance.index}"] = instance.last_known_state
       end
+    end
+  end
+
+  def vm_states
+    director.instances.each_with_object({}) do |instance, result|
+      result["#{instance.instance_group_name}/#{instance.index}"] = instance.vm_state
     end
   end
 
@@ -23,7 +29,7 @@ describe 'start command', type: :integration do
         expect do
           output = isolated_start(instance_group: 'foobar', index: 0)
           expect(output).to match(/Starting instance foobar: foobar.* \(0\)/)
-        end.to change { vm_states }
+        end.to change { job_states }
           .from(
             'foobar/0' => 'stopped',
             'foobar/1' => 'running',
@@ -47,7 +53,7 @@ describe 'start command', type: :integration do
         expect do
           output = isolated_start(instance_group: 'foobar', id: instance_uuid)
           expect(output).to match %r{Starting instance foobar: foobar/#{instance_uuid} \(\d\)}
-        end.to change { vm_states }
+        end.to change { job_states }
           .from(
             'foobar/0' => 'running',
             'foobar/1' => 'stopped',
@@ -78,7 +84,7 @@ describe 'start command', type: :integration do
         expect do
           output = isolated_start(instance_group: 'foobar', index: 0)
           expect(output).to match(/Starting instance foobar: foobar.* \(0\)/)
-        end.to change { vm_states }
+        end.to change { job_states }
           .from(
             'foobar/1' => 'running',
             'foobar/2' => 'running',
@@ -208,6 +214,42 @@ describe 'start command', type: :integration do
 
         config_file = last_instance.read_job_template('job_with_bad_template', 'config/config.yml')
         expect(config_file).to include('original_value')
+      end
+    end
+
+    context 'when the instance is hard stopped' do
+      before do
+        prepare_for_deploy
+        jobs = [
+          {
+            'name' => 'job_with_bad_template',
+            'release' => 'bosh-release',
+            'properties' => {
+              'gargamel' => {
+                'color' => 'value'
+              },
+            },
+          },
+        ]
+        manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups(name: 'bad-instance-group', jobs: jobs, instances: 1)
+        deploy(manifest_hash: manifest_hash)
+
+        manifest_hash['instance_groups'].first['jobs'].first['properties'].merge!({ 'fail_on_job_start' => true, 'fail_instance_index' => 0 })
+
+        deploy(manifest_hash: manifest_hash, failure_expected: true)
+      end
+
+      it 'does not change state when start is issued' do
+        expect(job_states).to eq('bad-instance-group/0' => 'stopped')
+        expect(vm_states).to eq('bad-instance-group/0' => 'started')
+
+        isolated_stop(instance_group: 'bad-instance-group', index:0, params: {'hard' => true})
+        expect(job_states).to eq({}) # VM state absent, instance state is detached
+        expect(vm_states).to eq('bad-instance-group/0' => 'detached')
+
+        expect do
+          isolated_start(instance_group: 'bad-instance-group', index: 0, params: {failure_expected: true})
+        end.to change { job_states }.to('bad-instance-group/0' => 'stopped') # VM state is running, but process state is stopped
       end
     end
   end

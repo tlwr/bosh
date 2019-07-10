@@ -1,6 +1,6 @@
 module Bosh::Spec
   class Instance
-    attr_reader :last_known_state, :vm_cid, :agent_id, :resurrection, :ips, :availability_zone, :id, :instance_group_name, :index, :ignore, :bootstrap, :disk_cids
+    attr_reader :last_known_state, :vm_cid, :agent_id, :resurrection, :ips, :availability_zone, :id, :instance_group_name, :index, :ignore, :bootstrap, :disk_cids, :vm_state
 
     def initialize(
       waiter,
@@ -18,7 +18,8 @@ module Bosh::Spec
       disk_cids,
       agent_base_dir,
       nats_config,
-      logger
+      logger,
+      state
     )
       @waiter = waiter
       @last_known_state = job_state
@@ -36,6 +37,7 @@ module Bosh::Spec
       @agent_base_dir = agent_base_dir
       @nats_config = nats_config
       @logger = logger
+      @vm_state = state
     end
 
     def read_job_template(template_name, template_path)

@@ -39,6 +39,8 @@ module Bosh::Director
             end
           end
 
+          # no one set the state to started for the active_vm. active_vm exists here
+
           return unless instance_plan.state_changed?
 
           event_log_stage = event_log.begin_stage("Starting instance #{instance_model.job}")
@@ -65,7 +67,7 @@ module Bosh::Director
         )
         instance_model.update(update_completed: true)
 
-        instance_model.update(state: 'started')
+        instance_model.update(state: 'started') # should be earlier? is this vm state or job state
       end
 
       def create_vm(instance_plan, deployment_plan, instance_model)
