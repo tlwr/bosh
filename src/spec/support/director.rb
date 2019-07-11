@@ -184,9 +184,12 @@ module Bosh::Spec
         resurrection_task = @db[:tasks].filter(
           username: 'hm',
           description: 'scan and fix',
+          # state: 'done',
           state: 'processing',
         )
         return unless resurrection_task.any?
+
+        # return resurrection_task if resurrection_task.any?
 
         @logger.debug("Waiting for resurrection to finish, found resurrection tasks: #{resurrection_task.all}")
         sleep(0.5)

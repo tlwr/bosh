@@ -32,8 +32,7 @@ describe 'resurrector', type: :integration, hm: true do
     deployment_hash['instance_groups'][0]['instances'] = 1
     deployment_hash_enabled = deployment_hash.merge('name' => 'simple_enabled')
     deployment_hash_disabled = deployment_hash.merge('name' => 'simple_disabled')
-    job_opts = {
-      name: 'foobar_without_packages',
+    job_opts = { name: 'foobar_without_packages',
       jobs: [{ 'name' => 'foobar_without_packages', 'release' => 'bosh-release' }],
       instances: 1,
     }
@@ -84,18 +83,36 @@ describe 'resurrector', type: :integration, hm: true do
     ig1_instances = instances.select { |i| i.instance_group_name == 'ig_1' }
     ig2_instances = instances.select { |i| i.instance_group_name == 'ig_2' }
 
+    # switch resurrection temporarily off to prevent health monitor from scheduling multiple scan and fix tasks
+    bosh_runner.run('update-resurrection off')
     ig2_instances.each(&:kill_agent)
     ig1_instances.each(&:kill_agent)
+    bosh_runner.run('update-resurrection on')
 
     ig2_instances.each { |i| director.wait_for_vm('ig_2', i.index, 300) }
     ig1_instances.each { |i| director.wait_for_vm('ig_1', i.index, 300) }
 
-    director.wait_for_resurrection_to_finish
-    resurrection_task = director.tasks.filter(
-      username: 'hm',
-      description: 'scan and fix',
-      state: 'done',
-    ).order(:id).first
+    resurrection_task = director.wait_for_resurrection_to_finish.first
+    puts resurrection_task.pretty_inspect
+
+#     resurrection_task = director.tasks.filter(
+#       username: 'hm',
+#       description: 'scan and fix',
+#       state: 'done',
+#       id: task_id,
+#     )
+
+#     other_task = director.tasks.filter(
+#       username: 'hm',
+#       description: 'scan and fix',
+#       state: 'done',
+#     ).order(:id).last
+
+#     puts "this is the first task"
+#     puts resurrection_task.pretty_inspect
+
+#     puts "this is the second task"
+#     puts other_task.pretty_inspect
 
     expect(resurrection_task.any?).to be_truthy
     expect(resurrection_task[:event_output]).to match(/.*ig_1.*ig_1.*ig_1.*ig_1.*ig_2.*ig_2.*ig_2.*ig_2.*/m)
@@ -114,10 +131,12 @@ describe 'resurrector', type: :integration, hm: true do
     upload_cloud_config(cloud_config_hash: Bosh::Spec::NewDeployments.simple_cloud_config)
     deploy_simple_manifest(manifest_hash: deployment_hash)
 
+    bosh_runner.run('update-resurrection off')
     instances = director.instances
     ig1_instances = instances.select { |i| i.instance_group_name == 'ig_1' }
     ig1_instances.each(&:kill_agent)
     ig1_instances.each { |i| director.wait_for_vm('ig_1', i.index, 300) }
+    bosh_runner.run('update-resurrection on')
 
     director.wait_for_resurrection_to_finish
     resurrection_task = director.tasks.filter(
