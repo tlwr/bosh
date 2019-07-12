@@ -11,6 +11,10 @@ module Bosh::Director::Models
     many_to_one :variable_set, class: 'Bosh::Director::Models::VariableSet'
     many_to_many :links, :class => 'Bosh::Director::Models::Links::Link', :join_table => :instances_links
 
+    def update=(stuff)
+      super(stuff)
+    end
+
     def validate
       validates_presence [:deployment_id, :job, :index, :state]
       validates_unique [:deployment_id, :job, :index]

@@ -36,10 +36,10 @@ module Bosh::Director
             event_log_stage = event_log.begin_stage("Creating VM for instance #{instance_model.job}")
             event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
               create_vm(instance_plan, deployment_plan, instance_model)
+              instance_plan.instance.model.state = 'stopped' # we're definitely not detached anymore, but ??? if we're going to start
+              instance_plan.instance.update_state
             end
           end
-
-          # no one set the state to started for the active_vm. active_vm exists here
 
           return unless instance_plan.state_changed?
 
@@ -62,12 +62,12 @@ module Bosh::Director
 
         instance_model.update(update_completed: false)
         InstanceUpdater::StateApplier.new(instance_plan, agent, cleaner, @logger, {}).apply(
-          instance_plan.desired_instance.instance_group.update,
+          instance_plan.desired_instance.instance_group.update, #it's already started because desired instance is constructed as started
           true,
         )
         instance_model.update(update_completed: true)
 
-        instance_model.update(state: 'started') # should be earlier? is this vm state or job state
+        # instance_model.update(state: 'started') # useless as stateapplier updates model
       end
 
       def create_vm(instance_plan, deployment_plan, instance_model)

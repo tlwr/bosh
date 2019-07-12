@@ -28,7 +28,7 @@ module Bosh::Director
         wait_for_running: wait_for_running,
         logger: @logger,
       )
-      @instance.update_state
+      #@instance.update_state # pass down deployment_plan/instance.state -> model.state; commit any changes
     end
   end
 end

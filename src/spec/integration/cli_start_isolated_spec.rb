@@ -247,9 +247,9 @@ describe 'start command', type: :integration do
         expect(job_states).to eq({}) # VM state absent, instance state is detached
         expect(vm_states).to eq('bad-instance-group/0' => 'detached')
 
-        expect do
-          isolated_start(instance_group: 'bad-instance-group', index: 0, params: {failure_expected: true})
-        end.to change { job_states }.to('bad-instance-group/0' => 'stopped') # VM state is running, but process state is stopped
+        isolated_start(instance_group: 'bad-instance-group', index: 0, params: {failure_expected: true})
+        expect(vm_states).to eq('bad-instance-group/0' => 'started')
+        expect(job_states).to eq('bad-instance-group/0' => 'stopped')
       end
     end
   end

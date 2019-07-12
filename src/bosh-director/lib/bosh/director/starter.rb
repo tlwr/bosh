@@ -9,18 +9,26 @@ module Bosh::Director
         wait_for_running: true,
         logger: Config.logger
       )
-        logger.info("Running pre-start for #{instance}")
-        agent_client.run_script('pre-start', {})
+        begin
+          logger.info("Running pre-start for #{instance}")
+          agent_client.run_script('pre-start', {})
 
-        logger.info("Starting instance #{instance}")
-        agent_client.start
+          logger.info("Starting instance #{instance}")
+          agent_client.start
 
-        return unless update_config && wait_for_running
+          return unless update_config && wait_for_running
 
-        min_watch_time = is_canary ? update_config.min_canary_watch_time : update_config.min_update_watch_time
-        max_watch_time = is_canary ? update_config.max_canary_watch_time : update_config.max_update_watch_time
+          min_watch_time = is_canary ? update_config.min_canary_watch_time : update_config.min_update_watch_time
+          max_watch_time = is_canary ? update_config.max_canary_watch_time : update_config.max_update_watch_time
 
-        wait_until_running(instance, agent_client, min_watch_time, max_watch_time, logger)
+          wait_until_running(instance, agent_client, min_watch_time, max_watch_time, logger)
+        rescue Exception => e
+          # instance state is already 'started' as it's the desired state during construction
+          instance.model.state = 'stopped' # what if try to start on 'failing'. is that possible
+          raise
+        ensure
+          instance.update_state
+        end
 
         logger.info("Running post-start for #{instance}")
         agent_client.run_script('post-start', {})
