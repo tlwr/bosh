@@ -3,6 +3,8 @@ name: foobar
 templates:
   foobar_ctl: bin/foobar_ctl
   drain.erb: bin/drain
+  post-start.erb: bin/post-start
+  pre-stop.erb: bin/pre-stop
 
 packages:
 - foo

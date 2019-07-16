@@ -39,4 +39,4 @@ case $1 in
   echo "Usage: foobar_ctl {start|stop}" ;;
 esac
 
-exit 0
+exit 4
