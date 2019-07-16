@@ -277,4 +277,37 @@ describe 'start command', type: :integration do
       end
     end
   end
+
+  context 'when the instance is recreated' do
+    before do
+      prepare_for_deploy
+      jobs = [
+        {
+          'name' => 'job_with_bad_template',
+          'release' => 'bosh-release',
+          'properties' => {
+            'gargamel' => {
+              'color' => 'value',
+            },
+          },
+        },
+      ]
+      manifest_hash = Bosh::Spec::NewDeployments.simple_manifest_with_instance_groups(
+        name: 'bad-instance-group',
+        jobs: jobs, instances: 1
+      )
+
+      deploy(manifest_hash: manifest_hash)
+    end
+
+    it 'starts successfully' do
+      isolated_recreate(instance_group: 'bad-instance-group', index: 0)
+      #expect(output).to contain(only stuff about this one? make another change that would be updated in deployment)
+    end
+
+    it 'skips drain and ignores unresponsive vm' do
+
+    end
+  end
+
 end
