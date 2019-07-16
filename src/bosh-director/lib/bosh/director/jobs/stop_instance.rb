@@ -18,32 +18,36 @@ module Bosh::Director
 
       def perform
         with_deployment_lock(@deployment_name) do
-          instance_model = Models::Instance.find(id: @instance_id)
-          raise InstanceNotFound if instance_model.nil?
+          stop
+        end
+      end
 
-          return if instance_model.stopped? && !@options['hard'] # stopped already, and we didn't pass in hard to change it
-          return if instance_model.detached? # implies stopped
+      def stop
+        instance_model = Models::Instance.find(id: @instance_id)
+        raise InstanceNotFound if instance_model.nil?
 
-          deployment_plan = DeploymentPlan::PlannerFactory.create(@logger)
-            .create_from_model(instance_model.deployment)
-          deployment_plan.releases.each(&:bind_model)
+        return if instance_model.stopped? && !@options['hard'] # stopped already, and we didn't pass in hard to change it
+        return if instance_model.detached? # implies stopped
 
-          instance_group = deployment_plan.instance_groups.find { |ig| ig.name == instance_model.job }
-          instance_group.jobs.each(&:bind_models)
+        deployment_plan = DeploymentPlan::PlannerFactory.create(@logger)
+                            .create_from_model(instance_model.deployment)
+        deployment_plan.releases.each(&:bind_model)
 
-          instance_plan = construct_instance_plan(instance_model, deployment_plan, instance_group, @options)
+        instance_group = deployment_plan.instance_groups.find { |ig| ig.name == instance_model.job }
+        instance_group.jobs.each(&:bind_models)
 
-          event_log = Config.event_log
-          event_log_stage = event_log.begin_stage("Stopping instance #{instance_model.job}")
-          event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
-            stop(instance_plan, instance_model)
-          end
+        instance_plan = construct_instance_plan(instance_model, deployment_plan, instance_group, @options)
 
-          if @options['hard']
-            event_log_stage = event_log.begin_stage('Deleting VM')
-            event_log_stage.advance_and_track(instance_model.vm_cid) do
-              detach_instance(instance_model)
-            end
+        event_log = Config.event_log
+        event_log_stage = event_log.begin_stage("Stopping instance #{instance_model.job}")
+        event_log_stage.advance_and_track(instance_plan.instance.model.to_s) do
+          perform_stop_sequence(instance_plan, instance_model)
+        end
+
+        if @options['hard']
+          event_log_stage = event_log.begin_stage('Deleting VM')
+          event_log_stage.advance_and_track(instance_model.vm_cid) do
+            detach_instance(instance_model)
           end
         end
       end
@@ -58,7 +62,7 @@ module Bosh::Director
         instance_model.update(state: 'detached')
       end
 
-      def stop(instance_plan, instance_model)
+      def perform_stop_sequence(instance_plan, instance_model)
         intent = @options['hard'] ? :delete_vm : :keep_vm
         target_state = @options['hard'] ? 'detached' : 'stopped'
         Stopper.stop(intent: intent, instance_plan: instance_plan, target_state: target_state, logger: @logger)
