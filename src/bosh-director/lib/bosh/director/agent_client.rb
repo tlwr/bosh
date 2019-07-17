@@ -41,7 +41,7 @@ module Bosh::Director
       @client_id = client_id
       @instance_name = instance_name || 'unknown'
       @nats_rpc = Config.nats_rpc
-      @timeout = options[:timeout] || 45
+      @timeout = options[:timeout] || 300
       @logger = Config.logger
       @retry_methods = options[:retry_methods] || {}
       @resource_manager = Api::ResourceManager.new
