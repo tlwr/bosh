@@ -479,6 +479,49 @@ module Bosh
       end
 
       class InstancePlanFromDB < InstancePlan
+        def self.create_from_instance_model(instance_model, deployment_plan, desired_state, logger, options = {})
+          instance_group = deployment_plan.instance_groups.find { |ig| ig.name == instance_model.job }
+          instance_group.jobs.each(&:bind_models)
+
+          desired_instance = DeploymentPlan::DesiredInstance.new(
+            instance_group,
+            deployment_plan,
+            nil,
+            instance_model.index,
+            desired_state,
+          )
+
+          state_migrator = DeploymentPlan::AgentStateMigrator.new(logger)
+
+          begin
+            existing_instance_state = instance_model.vm_cid ? state_migrator.get_state(instance_model) : {}
+          rescue Bosh::Director::RpcTimeout, Bosh::Director::RpcRemoteException => e
+            raise e, "#{instance_model.name}: #{e.message}" unless options['ignore_unresponsive_agent']
+
+            existing_instance_state = { 'job_state' => 'unresponsive' }
+          end
+
+          variables_interpolator = ConfigServer::VariablesInterpolator.new
+
+          instance_repository = DeploymentPlan::InstanceRepository.new(logger, variables_interpolator)
+          instance = instance_repository.build_instance_from_model(
+            instance_model,
+            existing_instance_state,
+            desired_instance.state,
+            desired_instance.deployment,
+          )
+
+          new(
+            existing_instance: instance_model,
+            desired_instance: desired_instance,
+            instance: instance,
+            variables_interpolator: variables_interpolator,
+            skip_drain: options['skip_drain'],
+            tags: instance.deployment_model.tags,
+            link_provider_intents: deployment_plan.link_provider_intents,
+          )
+        end
+
         def network_plans
           @instance.existing_network_reservations.map do |reservation|
             DeploymentPlan::NetworkPlanner::Plan.new(reservation: reservation, existing: true)
