@@ -1,19 +1,10 @@
 module Bosh::Director
   module Jobs
-    class RestartInstance < BaseJob
-      include LockHelper
-
+    class RestartInstance < InstanceLifecycle
       @queue = :normal
 
       def self.job_type
         :restart_instance
-      end
-
-      def initialize(deployment_name, instance_id, options = {})
-        @deployment_name = deployment_name
-        @instance_id = instance_id
-        @options = options
-        @logger = Config.logger
       end
 
       def perform
@@ -21,8 +12,18 @@ module Bosh::Director
           instance_model = Models::Instance.find(id: @instance_id)
           raise InstanceNotFound if instance_model.nil?
 
-          Jobs::StopInstance.new(@deployment_name, @instance_id, @options).perform_without_lock
-          Jobs::StartInstance.new(@deployment_name, @instance_id, @options).perform_without_lock
+          begin
+            parent_event_id = add_event('restart', instance_model)
+
+            Jobs::StopInstance.new(@deployment_name, @instance_id, @options).perform_without_lock
+            Jobs::StartInstance.new(@deployment_name, @instance_id, @options).perform_without_lock
+          rescue StandardError => e
+            raise e
+          ensure
+            add_event('restart', instance_model, parent_event_id, e)
+          end
+
+          instance_model.name
         end
       end
     end

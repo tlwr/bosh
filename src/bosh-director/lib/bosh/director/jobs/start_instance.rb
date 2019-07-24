@@ -1,19 +1,10 @@
 module Bosh::Director
   module Jobs
-    class StartInstance < BaseJob
-      include LockHelper
-
+    class StartInstance < InstanceLifecycle
       @queue = :normal
 
       def self.job_type
         :start_instance
-      end
-
-      def initialize(deployment_name, instance_id, options = {})
-        @deployment_name = deployment_name
-        @instance_id = instance_id
-        @options = options
-        @logger = Config.logger
       end
 
       def perform
@@ -118,24 +109,6 @@ module Bosh::Director
 
         local_dns_manager = LocalDnsManager.create(Config.root_domain, @logger)
         local_dns_manager.update_dns_record_for_instance(instance_plan)
-      end
-
-      def add_event(action, instance_model, parent_id = nil, error = nil)
-        instance_name = instance_model.name
-        deployment_name = instance_model.deployment.name
-
-        event = Config.current_job.event_manager.create_event(
-          parent_id: parent_id,
-          user: Config.current_job.username,
-          action: action,
-          object_type: 'instance',
-          object_name: instance_name,
-          task: Config.current_job.task_id,
-          deployment: deployment_name,
-          instance: instance_name,
-          error: error,
-        )
-        event.id
       end
     end
   end
