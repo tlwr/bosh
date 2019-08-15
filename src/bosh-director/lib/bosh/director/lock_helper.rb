@@ -3,7 +3,7 @@ module Bosh::Director
     def with_deployment_lock(deployment, opts = {})
       if deployment.respond_to?(:name)
         name = deployment.name
-      elsif deployment.kind_of?(String)
+      elsif deployment.is_a?(String)
         name = deployment
       else
         raise ArgumentError, "invalid deployment: #{deployment}"
@@ -11,6 +11,18 @@ module Bosh::Director
       timeout = opts[:timeout] || 10
       Config.logger.info("Acquiring deployment lock on #{name}")
       Lock.new("lock:deployment:#{name}", {:timeout => timeout, :deployment_name => name }).lock { yield }
+    end
+
+    def deployment_locked?(deployment)
+      if deployment.respond_to?(:name)
+        name = deployment.name
+      elsif deployment.is_a?(String)
+        name = deployment
+      else
+        raise ArgumentError, "invalid deployment: #{deployment}"
+      end
+
+      !Models::Lock.find(name: "lock:deployment:#{name}").nil?
     end
 
     def with_network_lock(name, opts = {})
