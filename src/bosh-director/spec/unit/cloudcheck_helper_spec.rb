@@ -152,6 +152,7 @@ module Bosh::Director
           vm = Models::Vm.where(instance_id: instance.id).first
           vm.nil? ? 0 : Models::Vm.where(instance_id: instance.id, active: true).count
         }.from(1).to(0)
+        expect(instance.state).to eq('detached')
       end
 
       context 'instance active_vm is nil' do

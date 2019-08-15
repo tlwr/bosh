@@ -38,7 +38,8 @@ module Bosh::Director
     def delete_vm_reference(instance)
       vm_model = instance.active_vm
       instance.active_vm = nil
-      vm_model&.destroy
+      Bosh::Director::DeploymentPlan::Steps::OrphanVmStep.new(vm_model).perform(nil)
+      instance.update(state: 'detached')
     end
 
     def delete_vm_from_cloud(instance_model)
@@ -48,6 +49,7 @@ module Bosh::Director
       validate_env(instance_model.vm_env)
 
       vm_deleter.delete_for_instance(instance_model)
+      instance_model.update(state: 'detached')
     end
 
     def recreate_vm_without_wait(instance_model)
@@ -55,6 +57,21 @@ module Bosh::Director
     end
 
     def recreate_vm(instance_model, wait_for_running = true)
+
+      # TODO can this call recreate_handler instead of doing its own thing?!
+      #
+      #
+      deployment_model = instance_model.deployment
+      factory = Bosh::Director::DeploymentPlan::PlannerFactory.create(@logger)
+      planner = factory.create_from_model(deployment_model)
+      template_cache = Bosh::Director::Core::Templates::TemplateBlobCache.new()
+      dns_encoder = LocalDnsEncoderManager.create_dns_encoder(planner.use_short_dns_addresses?, planner.use_link_dns_names?)
+      vm_creator = vm_creator(template_cache, dns_encoder, planner.link_provider_intents)
+      instance_plan_to_create = create_instance_plan(instance_model, planner)
+      report = DeploymentPlan::Stages::Report.new
+      Bosh::Director::InstanceUpdater::RecreateHandler.new(@logger, vm_creator, planner.ip_provider, instance_plan_to_create, report, instance_model).perform
+      return true
+
       @logger.debug("Recreating Vm: #{instance_model})")
       delete_vm_from_cloud(instance_model)
 
@@ -115,10 +132,16 @@ module Bosh::Director
           templates_persister = RenderedTemplatesPersister.new(blobstore_client, @logger)
 
           templates_persister.persist(instance_plan_to_create)
-
-          # for backwards compatibility with instances that don't have update config
+          #
+          # # for backwards compatibility with instances that don't have update config
+          # puts "##############################################"
+          # puts instance_plan_to_create.desired_instance.inspect
+          # puts apply_spec.inspect
+          # puts "##############################################"
           update_config = apply_spec['update'].nil? ? nil : DeploymentPlan::UpdateConfig.new(apply_spec['update'])
 
+          # instance_model.update(state: 'started')
+          instance_plan_to_create.instance.update_state
           InstanceUpdater::StateApplier.new(
             instance_plan_to_create,
             agent_client(instance_model.agent_id, instance_model.name),

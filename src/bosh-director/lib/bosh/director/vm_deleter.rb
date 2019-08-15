@@ -34,6 +34,7 @@ module Bosh::Director
           @enable_virtual_delete_vm,
         ).perform(DeploymentPlan::Stages::Report.new.tap { |r| r.vm = vm })
       end
+      instance_model.reload
     end
 
     def unmount_and_detach_disk(instance_model)
