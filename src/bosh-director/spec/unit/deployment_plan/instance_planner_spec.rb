@@ -52,11 +52,16 @@ describe 'BD::DeploymentPlan::InstancePlanner' do
     )
   end
   let(:instance_group) do
-    instance_group = BD::DeploymentPlan::InstanceGroup.new(logger)
-    instance_group.name = 'foo-instance_group'
-    instance_group.availability_zones << az
-    instance_group
+    instance_double(
+      Bosh::Director::DeploymentPlan::InstanceGroup,
+      name: 'foo-instance_group',
+      availability_zones: [az],
+      vm_type: vm_type,
+    )
+    # instance_group_spec = Bosh::Spec::Deployments.simple_instance_group(name: 'foo-instance_group')
+    # Bosh::Director::DeploymentPlan::InstanceGroup.parse(deployment, instance_group_spec, nil, logger)
   end
+  let(:vm_type) { Bosh::Director::DeploymentPlan::VmType.new('name' => 'fake-vm-type') }
   let(:desired_instance) { BD::DeploymentPlan::DesiredInstance.new(instance_group, deployment, nil, 0) }
   let(:tracer_instance) do
     make_instance
@@ -68,7 +73,16 @@ describe 'BD::DeploymentPlan::InstancePlanner' do
   end
 
   def make_instance(idx = 0)
-    instance = BD::DeploymentPlan::Instance.create_from_instance_group(instance_group, idx, 'started', deployment_model, {}, az, logger, variables_interpolator)
+    instance = BD::DeploymentPlan::Instance.create_from_instance_group(
+      instance_group,
+      idx,
+      'started',
+      deployment_model,
+      {},
+      az,
+      logger,
+      variables_interpolator,
+    )
     instance.bind_new_instance_model
     instance
   end

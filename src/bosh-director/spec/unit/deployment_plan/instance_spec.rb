@@ -55,8 +55,6 @@ module Bosh::Director::DeploymentPlan
     let(:desired_instance) { DesiredInstance.new(job, current_state, plan, az, 1) }
 
     describe '#bind_existing_instance_model' do
-      let(:instance_group) { InstanceGroup.new(logger) }
-
       let(:network) do
         instance_double('Bosh::Director::DeploymentPlan::Network', name: 'fake-network', reserve: nil)
       end
@@ -129,8 +127,6 @@ module Bosh::Director::DeploymentPlan
     end
 
     context 'applying state' do
-      let(:instance_group) { InstanceGroup.new(logger) }
-
       let(:agent_client) { instance_double('Bosh::Director::AgentClient') }
 
       before do

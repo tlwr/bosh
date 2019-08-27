@@ -33,6 +33,22 @@ FactoryBot.define do
   end
 end
 
+FactoryBot.define do
+  factory :instance_group, class: Bosh::Director::DeploymentPlan::InstanceGroup do
+    name { 'foo' }
+    canonical_name { 'foo' }
+    lifecycle { 'service' }
+    jobs { [] }
+    env {}
+    stemcell {}
+    vm_type {}
+    persistent_disk_collection {}
+    logger { Logging::Logger.new('TestLogger') }
+
+    initialize_with { new(name, static_ips, default_for, deployment_network) }
+  end
+end
+
 module Bosh::Director
   module DeploymentPlan
     [Stemcell, ManualNetwork, JobNetwork].each do |klass|

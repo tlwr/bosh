@@ -38,11 +38,13 @@ module Bosh
       end
 
       let(:instance_group) do
-        instance_group = BD::DeploymentPlan::InstanceGroup.new(logger)
-
-        instance_group.persistent_disk_collection = DeploymentPlan::PersistentDiskCollection.new(logger)
-        instance_group.persistent_disk_collection.add_by_disk_size(1024)
-        instance_group
+        disk = DeploymentPlan::PersistentDiskCollection.new(logger)
+        disk.add_by_disk_size(1024)
+        instance_double(
+          BD::DeploymentPlan::InstanceGroup,
+          persistent_disk_collection: disk,
+          should_create_swap_delete?: false,
+        )
       end
 
       let(:instance_model) do

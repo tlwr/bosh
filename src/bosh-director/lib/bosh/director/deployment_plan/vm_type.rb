@@ -14,8 +14,8 @@ module Bosh::Director
 
       def spec
         {
-            'name' => @name,
-            'cloud_properties' => @cloud_properties,
+          'name' => @name,
+          'cloud_properties' => @cloud_properties,
         }
       end
     end

@@ -132,9 +132,9 @@ module Bosh::Director::DeploymentPlan
     let(:existing_instance) { instance_model }
 
     let(:instance_group_spec) do
-      instance_group = Bosh::Spec::Deployments.simple_instance_group
-      instance_group['env'] = { 'bosh' => { 'password' => 'foobar' } }
-      instance_group
+      spec = Bosh::Spec::Deployments.simple_instance_group
+      spec['env'] = { 'bosh' => { 'password' => 'foobar' } }
+      spec
     end
 
     let(:network_spec) { Bosh::Spec::Deployments.simple_cloud_config['networks'].first }
