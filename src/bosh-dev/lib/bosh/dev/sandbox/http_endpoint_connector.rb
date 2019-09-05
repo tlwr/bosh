@@ -22,12 +22,14 @@ module Bosh::Dev::Sandbox
 
       begin
         remaining_attempts -= 1
+        sleep(0.5)
         result = Timeout.timeout(2) { Net::HTTP.get(uri) }
         if !@expected_content.empty? && !result.to_s.include?(@expected_content)
           raise MissingContent.new("Expected to find '#{@expected_content}' in '#{result}'")
         end
         @logger.info("Connected to #{@service_name} at http://#{@host}:#{@port}#{@endpoint} (logs at #{@log_location}*)")
       rescue Timeout::Error, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ETIMEDOUT, MissingContent => e
+        @logger.warn("Failing to connect to #{@service_name}, retrying")
         if remaining_attempts == 0
           @logger.error("Failed to connect to #{@service_name}: #{e.inspect} host=#{@host} port=#{@port}")
           raise

@@ -120,7 +120,7 @@ pushd bosh-src/src
   bundle_exit_code=$?
 
   if [[ "$DB" = "mysql" && "$DB_TLS" = true ]]; then
-    sudo service mysql stop
+    service mysql stop
   fi
 popd
 
