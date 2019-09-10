@@ -16,14 +16,12 @@ module Bosh::Director
           @logger.error("Failed to release IP for manual network '#{reservation.network.name}': IP must be provided")
           raise Bosh::Director::NetworkReservationIpMissing, "Can't release reservation without an IP"
         else
-          @ip_repo.delete(reservation.ip, reservation.network.name)
+          @ip_repo.delete(reservation.ip)
         end
       end
 
-      def reserve(reservation)
+      def reserve(reservation) # rename to reserve_desired_ips
         # We should not be calling reserve on reservations that have already been reserved
-        return if reservation.reserved?
-
         if reservation.network.is_a?(DynamicNetwork)
           reserve_dynamic(reservation)
           return
@@ -63,6 +61,7 @@ module Bosh::Director
       private
 
       def reserve_manual(reservation)
+        # Todo: can we refactor the nested if/elses
         if reservation.ip.nil?
           @logger.debug("Allocating dynamic ip for manual network '#{reservation.network.name}'")
 
@@ -73,7 +72,6 @@ module Bosh::Director
               @logger.debug("Reserving dynamic IP '#{format_ip(ip)}' for manual network '#{reservation.network.name}'")
               reservation.resolve_ip(ip)
               reservation.resolve_type(:dynamic)
-              reservation.mark_reserved
               return
             end
           end
@@ -106,11 +104,9 @@ module Bosh::Director
         subnet_az_names = subnet.availability_zone_names.to_a.join(', ')
         if subnet.static_ips.include?(reservation.ip.to_i)
           reservation.resolve_type(:static)
-          reservation.mark_reserved
           @logger.debug("Found subnet with azs '#{subnet_az_names}' for #{format_ip(reservation.ip)}. Reserved as static network reservation.")
         else
           reservation.resolve_type(:dynamic)
-          reservation.mark_reserved
           @logger.debug("Found subnet with azs '#{subnet_az_names}' for #{format_ip(reservation.ip)}. Reserved as dynamic network reservation.")
         end
       end
@@ -143,13 +139,10 @@ module Bosh::Director
           @ip_repo.add(reservation)
           reservation.resolve_type(:static)
         end
-
-        reservation.mark_reserved
       end
 
       def reserve_dynamic(reservation)
         reservation.resolve_type(:dynamic)
-        reservation.mark_reserved
       end
 
       def filter_subnet_by_instance_az(reservation)

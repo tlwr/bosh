@@ -35,12 +35,13 @@ module Bosh::Director
   end
 
   class ExistingNetworkReservation < NetworkReservation
-    attr_reader :network_type
+    attr_reader :network_type, :obsolete
 
     def initialize(instance_model, network, ip, network_type)
       super(instance_model, network)
       @ip = ip_to_i(ip) if ip
       @network_type = network_type
+      @obsolete = network.is_a? Bosh::Director::DeploymentPlan::Network
     end
 
     def resolve_type(type)

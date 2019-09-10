@@ -1,8 +1,8 @@
 require 'spec_helper'
 
 module Bosh::Director::DeploymentPlan
-  describe DatabaseIpRepo do
-    let(:ip_repo) { DatabaseIpRepo.new(logger) }
+  describe IpRepo do
+    let(:ip_repo) { IpRepo.new(logger) }
     let(:instance_model) { Bosh::Director::Models::Instance.make }
     let(:network_spec) do
       {

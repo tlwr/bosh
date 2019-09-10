@@ -3,7 +3,7 @@ module Bosh::Director
     def initialize(logger)
       @logger = logger
       @vm_deleter = VmDeleter.new(logger)
-      @db_ip_repo = DeploymentPlan::DatabaseIpRepo.new(logger)
+      @db_ip_repo = DeploymentPlan::IpRepo.new(logger)
     end
 
     def delete_all(lock_timeout = 5)
